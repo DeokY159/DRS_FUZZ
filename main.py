@@ -10,7 +10,7 @@ class Fuzzer:
 
     def prepare(self):
         # package and build each DDS implementation
-        self.builder.build_dds_all(self.version, self.robot)
+        self.builder.build_docker(self.version, self.robot)
 
     def run(self):
         print(f"Starting fuzzing on ROS2 {self.version} with {self.robot}")

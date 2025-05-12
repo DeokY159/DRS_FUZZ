@@ -10,19 +10,9 @@ class Builder:
         self.result_dir = os.path.join(self.root_dir, 'result')
         os.makedirs(self.result_dir, exist_ok=True)
 
-    def build_dds_all(self, version, robot):
-        # package and build each DDS implementation under build/DDS
-        dds_root = os.path.join(self.build_dir, 'DDS')
-        if not os.path.isdir(dds_root):
-            raise FileNotFoundError(f"DDS directory not found: {dds_root}")
-        for name in sorted(os.listdir(dds_root)):
-            impl_dir = os.path.join(dds_root, name)
-            if os.path.isdir(impl_dir):
-                self.package_and_build_dds(version, robot, name)
-
-    def package_and_build_dds(self, version, robot, name):
-        # prepare result/<version>_<robot>_<dds>
-        target = f"{version}_{robot}_{name}"
+    def build_docker(self, version, robot):
+        # prepare result/<version>_<robot>
+        target = f"{version}_{robot}"
         target_dir = os.path.join(self.result_dir, target)
         if os.path.exists(target_dir):
             shutil.rmtree(target_dir)
@@ -36,16 +26,15 @@ class Builder:
         dst_robot = os.path.join(target_dir, f'{robot}.sh')
         shutil.copy(src_robot, dst_robot)
         # copy DDS implementation folder
-        src_dds = os.path.join(self.build_dir, 'DDS', name)
-        dst_dds = os.path.join(target_dir, name)
-        shutil.copytree(src_dds, dst_dds)
+        src_dds = os.path.join(self.build_dir, 'DDS', f'build.sh')
+        dst_dds = os.path.join(target_dir, f'build.sh')
+        shutil.copy(src_dds, dst_dds)
         # build Docker image
-        tag = f"fuzzer_{version}_{robot}_{name}"
+        tag = f"fuzzer_{version}_{robot}"
         print(f"Building DDS image: {tag}")
         subprocess.run([
             'docker', 'build',
             '--build-arg', f'TARGET_ROBOT={robot}',
-            '--build-arg', f'TARGET_DDS={name}',
             '-t', tag,
             target_dir
         ], check=True)
