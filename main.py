@@ -14,7 +14,7 @@ class Fuzzer:
 
     def run(self):
         print(f"Starting fuzzing on ROS2 {self.version} with {self.robot}")
-        # TODO: implement inspector, mutator, executor, oracle, feedback loop
+        self.builder.run_docker(self.version, self.robot)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

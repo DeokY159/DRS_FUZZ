@@ -1,31 +1,20 @@
 #!/usr/bin/env bash
 set -e
 
-apt-get update && apt-get install -y \
-    ros-humble-dynamixel-sdk \
-    ros-humble-turtlebot3-msgs \
-    ros-humble-turtlebot3 \
+sudo apt-get update && sudo apt-get install -y ros-${ROS_DISTRO}-gazebo-* \
+    ros-${ROS_DISTRO}-cartographer ros-humble-cartographer-ros \
+    ros-${ROS_DISTRO}-navigation2 ros-humble-nav2-bringup \
   && rm -rf /var/lib/apt/lists/*
 
-mkdir -p /turtlebot3_ws/src
-cd /turtlebot3_ws/src
-git clone -b humble https://github.com/ROBOTIS-GIT/DynamixelSDK.git
-git clone -b humble https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git
-git clone -b humble https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
-git clone -b humble https://github.com/ROBOTIS-GIT/turtlebot3.git
-
-
-export CXXFLAGS="-fsanitize=address,fuzzer-no-link -fno-omit-frame-pointer -O1"
-export CFLAGS="-fsanitize=address,fuzzer-no-link -fno-omit-frame-pointer -O1"
-export LDFLAGS="-fsanitize=address,fuzzer-no-link"
+mkdir -p ~/turtlebot3_ws/src
+cd ~/turtlebot3_ws/src
+git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/DynamixelSDK.git
+git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git
+git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
+git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3.git
 
 source /opt/ros/humble/setup.sh
-rosdep update
-cd /turtlebot3_ws
-rosdep install --from-paths src --ignore-src --rosdistro humble -y
-
-cd /turtlebot3_ws
-colcon build --symlink-install \
-  --cmake-args -DCMAKE_C_COMPILER=clang-16 -DCMAKE_CXX_COMPILER=clang++-16
+cd ~/turtlebot3_ws
+colcon build --parallel-worker 1 --cmake-args -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address
 
 echo 'export TURTLEBOT3_MODEL=burger' >> /etc/profile.d/turtlebot3.sh
