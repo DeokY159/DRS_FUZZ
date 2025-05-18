@@ -1,5 +1,13 @@
 # DRS FUZZ Tree
 
+## run command
+```bash
+python3 main.py humble turtlebot3
+python3 main.py <ros version> <robot>
+```
+
+
+## dir tree
 ```bash
 ./build
 ├── builder.py
