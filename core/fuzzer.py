@@ -14,9 +14,10 @@ from geometry_msgs.msg import Twist
 from scapy.all import sendp, Ether, IP, UDP
 from scapy.contrib.rtps import RTPSMessage
 
-import inspector
-from mutator import RTPSPacket, DDSConfig
-from ui import info, error
+import core.inspector as inspector
+from build.builder import Builder
+from core.mutator import RTPSPacket, DDSConfig
+from core.ui import info, error
 
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 5      # Maximum number of attempts for retryable operations
@@ -188,24 +189,25 @@ class FuzzPublisher(Node):
 
 class Fuzzer:
     """
-    Top‐level controller that cycles through different RMW implementations,
-    updates QoS every PACKETS_PER_QOS messages, and launches FuzzPublisher runs.
+    Top-level controller that cycles through RMWs, updates QoS, and launches runs
     """
     DST_IP_MAP = {
-        "rmw_fastrtps_cpp": "192.168.0.7",
-        "rmw_cyclonedds_cpp": "192.168.0.7",
-        "rmw_opendds_cpp": "192.168.0.7",
+        "rmw_fastrtps_cpp":   "192.168.10.10",
+        "rmw_cyclonedds_cpp": "192.168.10.20",
+        #"rmw_opendds_cpp":    "192.168.10.30",
     }
 
-    def __init__(self, robot: str, topic_name: str, iface: str) -> None:
-        self.robot          = robot
-        self.topic_name     = topic_name
-        self.iface          = iface
-        self.src_ip         = get_host_internal_ip()
-        self.rtps           = RTPSPacket(self.topic_name)
-        self.dds_config     = DDSConfig()
+    def __init__(self, version: str, robot: str, topic_name: str, iface: str) -> None:
+        self.version    = version
+        self.robot      = robot
+        self.topic_name = topic_name
+        self.iface      = iface
+        self.src_ip     = get_host_internal_ip()
+        self.rtps       = RTPSPacket(self.topic_name)
+        self.dds_config = DDSConfig()
+        self.builder    = Builder()
 
-    def run_with_rmw(self, rmw_impl: str) -> None:
+    def gen_packet_sender(self, rmw_impl: str) -> None:
         """
         Initialize rclpy, create and spin a FuzzPublisher node for one run.
         """
@@ -217,46 +219,51 @@ class Fuzzer:
         info(f"Run with {rmw_impl}")
 
         try:
-            node = FuzzPublisher(   
-                    robot      = self.robot,
-                    topic_name = self.topic_name, 
-                    rtps       = self.rtps, 
-                    rmw_impl   = rmw_impl,
-                    qos        = self.dds_config.get_qos(),
-                    src_ip     = self.src_ip,
-                    dst_ip     = self.DST_IP_MAP[rmw_impl], 
-                    iface      = self.iface
-                )
+            node = FuzzPublisher(
+                robot      = self.robot,
+                topic_name = self.topic_name,
+                rtps       = self.rtps,
+                rmw_impl   = rmw_impl,
+                qos        = self.dds_config.get_qos(),
+                src_ip     = self.src_ip,
+                dst_ip     = self.DST_IP_MAP[rmw_impl],
+                iface      = self.iface
+            )
             rclpy.spin_until_future_complete(node, node.future)
         finally:
             node.destroy_node()
             rclpy.shutdown()
+
         info(f"Publisher with {rmw_impl} Terminated\n")
-    
+
     def run(self) -> None:
         """
-        Main loop: every PACKETS_PER_QOS messages update QoS, then
-        cycle through each RMW implementation.
+        Start Docker, then iteratively run fuzzing across RMWs
         """
+        try:
+            info(f"Launching Docker for version='{self.version}', robot='{self.robot}'")
+            self.builder.run_docker(self.version, self.robot, self.DST_IP_MAP)
+        except Exception as e:
+            error(f"Docker run failed: {e}")
+            sys.exit(1)
+
         fuzz_loop = 1
         try:
             while True:
-                # Update QoS combination every PACKETS_PER_QOS messages
                 if fuzz_loop % PACKETS_PER_QOS == 1:
                     self.dds_config.update_qos()
                     info("QoS combination has changed")
 
-                # Run publisher for each RMW variant
-                self.run_with_rmw("rmw_fastrtps_cpp")
+                self.gen_packet_sender("rmw_fastrtps_cpp")
                 time.sleep(RUN_DELAY)
-                self.run_with_rmw("rmw_cyclonedds_cpp")
+
+                self.gen_packet_sender("rmw_cyclonedds_cpp")
                 time.sleep(RUN_DELAY)
-                self.run_with_rmw("rmw_opendds_cpp")
-                time.sleep(RUN_DELAY)
+
+                #self.gen_packet_sender("rmw_opendds_cpp")
+                #time.sleep(RUN_DELAY)
+
                 fuzz_loop += MESSAGES_PER_RUN
+
         except KeyboardInterrupt:
             info("Terminating Fuzzer...")
-
-if __name__ == '__main__':
-    fuzzer = Fuzzer(robot="turtlebot3", topic_name="cmd_vel", iface="ens33")
-    fuzzer.run()

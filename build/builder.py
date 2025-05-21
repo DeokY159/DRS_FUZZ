@@ -39,48 +39,48 @@ class Builder:
             target_dir
         ], check=True)
     
-    def run_docker(self, version, robot, container_name='test'):
+    def run_docker(self, version, robot, DST_IP_MAP):
         """
         xhost 설정 후, DISPLAY 포워딩과 --privileged 옵션으로 컨테이너를 실행합니다.
         Docker network 'drs_fuzz'를 bridge 모드로 생성하고 지정합니다.
         """
-        image_tag = f"fuzzer_{version}_{robot}"
+        
+        image_tag    = f"fuzzer_{version}_{robot}"
         network_name = "drs_fuzz"
-        subnet = "172.21.0.0/16"
-        container_ip = "172.21.0.2"
+        subnet       = "192.168.10.0/24"
 
         print(f"[Builder] Granting X server access: xhost +local:root")
         subprocess.run(['xhost', '+local:root'], check=True)
 
-        # Try creating network only if it doesn't exist
         result = subprocess.run(
             ['docker', 'network', 'ls', '--filter', f'name=^{network_name}$', '--format', '{{.Name}}'],
             capture_output=True, text=True
         )
+        if network_name in result.stdout.splitlines():
+            print(f"[Builder] Removing existing Docker network: {network_name}")
+            subprocess.run(['docker', 'network', 'rm', network_name], check=True)
 
-        if network_name not in result.stdout.splitlines():
-            print(f"[Builder] Creating Docker network: {network_name}")
-            subprocess.run([
-                'docker', 'network', 'create',
-                '--driver', 'bridge',
-                f'--subnet={subnet}',
-                network_name
-            ], check=True)
-        else:
-            print(f"[Builder] Docker network '{network_name}' already exists. Reusing.")
+        print(f"[Builder] Creating Docker network: {network_name}")
+        subprocess.run([
+            'docker', 'network', 'create',
+            '--driver', 'bridge',
+            f'--subnet={subnet}',
+            network_name
+        ], check=True)
 
 
         # Run container with the created network
-        cmd = [
-            'docker', 'run',
-            '-it', '--privileged',
-            '-e', f'DISPLAY={os.environ.get("DISPLAY")}',
-            '-v', '/tmp/.X11-unix:/tmp/.X11-unix',
-            '--net', network_name,
-            '--ip', container_ip,
-            '--name', container_name,
-            image_tag
-        ]
-        print(f"[Builder] Running container '{container_name}' from image '{image_tag}' with network '{network_name}'")
-        subprocess.run(cmd, check=True)
-        print(f"[Builder] Container '{container_name}' exited")
+        for dds_name, dds_ip in DST_IP_MAP.items():
+            container_name = f"{version}_{robot}_{dds_name}"
+            print(f"[Builder] Running container '{container_name}' from image '{image_tag}' with network '{network_name}'")
+            subprocess.run([
+                'docker', 'run',
+                '--rm','-d', '--privileged',
+                '-e', f'DISPLAY={os.environ.get("DISPLAY")}',
+                '-v', '/tmp/.X11-unix:/tmp/.X11-unix',
+                '--net', network_name,
+                '--ip', dds_ip,
+                '--name', container_name,
+                image_tag
+            ], check=True)
+            print(f"[Builder] Container '{container_name}' exited")
