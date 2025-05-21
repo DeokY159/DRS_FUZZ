@@ -45,5 +45,6 @@ RUN chmod +x /root/${TARGET_ROBOT}.sh \
 
 ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
 ENV ASAN_OPTIONS="detect_leaks=0:new_delete_type_mismatch=0:handle_segv=0:abort_on_error=0:symbolize=1"
+RUN echo "source ~/ros2_humble/install/setup.bash" >> /etc/bash.bashrc
 
 ENTRYPOINT ["/bin/bash"]
