@@ -191,7 +191,7 @@ class Fuzzer:
             sys.exit(1)
         finally:
             info("Deleting robot and tearing down containers")
-            self.container.close_docker()
+            #self.container.close_docker()
 
 
         # 2) main fuzz loop

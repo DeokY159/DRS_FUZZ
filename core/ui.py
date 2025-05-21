@@ -6,3 +6,6 @@ def warn(message):
 
 def error(message):
     print(f"\033[91m[FUZZER ERROR]\033[0m {message}")
+
+def done(message):
+    print(f"\033[92m[FUZZER DONE]\033[0m{message}")

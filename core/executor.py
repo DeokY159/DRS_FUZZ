@@ -4,11 +4,13 @@ import subprocess
 import os
 import sys
 import time
+import re
+from subprocess import Popen, PIPE, STDOUT
 from ament_index_python.packages import get_package_share_directory
-from core.ui import info, error
+from core.ui import info, error, warn, done
 
 RETRY_MAX_ATTEMPTS = 5
-RETRY_DELAY        = 1.0
+TIME_DELAY        = 1.0
 
 class FuzzContainer:
     """
@@ -33,6 +35,24 @@ class FuzzContainer:
         except subprocess.CalledProcessError as e:
             error(f"Failed to exec in '{container}': {e}")
             raise
+
+    def _wait_for_log(self, container: str, pattern: str, timeout: float = 30.0) -> None:
+        """
+        Follow 'docker logs -f' and return once the given regex pattern appears
+        in the logs or timeout is reached.
+        """
+        warn(f"Waiting for log pattern '{pattern}' in '{container}'")
+        proc = Popen(['docker', 'logs', '-f', container], stdout=PIPE, stderr=STDOUT, text=True)
+        start = time.time()
+        try:
+            for line in proc.stdout:
+                if re.search(pattern, line):
+                    done(f"[{container}] log matched: {pattern}")
+                    return
+                if time.time() - start > timeout:
+                    raise TimeoutError(f"Timeout waiting for '{pattern}' in {container}")
+        finally:
+            proc.kill()
 
     def run_docker(self) -> None:
         info("Granting X server access: xhost +local:root")
@@ -61,6 +81,7 @@ class FuzzContainer:
                 subprocess.run([
                     'docker','run','--rm','-d','--privileged',
                     '-e', f"DISPLAY={os.environ.get('DISPLAY')}",
+                    '-e', f"RMW_IMPLEMENTATION={dds_name}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
                     '--net', self.network_name, '--ip', dds_ip,
                     '--name', cname, self.image_tag,
@@ -72,16 +93,20 @@ class FuzzContainer:
 
     def run_gazebo(self) -> None:
         """
-        Launch Gazebo server inside each container.
+        Launch Gazebo server inside each container, detach and wait for "Gazebo multi-robot simulator" in logs.
         """
         for dds_name in self.dds_map:
             cname = f"{self.version}_{self.robot}_{dds_name}"
-            # 한 문자열로 묶어서 -lc 뒤에 넘겨줍니다.
-            cmd = [
-                'bash', '-lc',
-                'ros2 launch turtlebot3_gazebo empty_world.launch.py'
-            ]
-            self._docker_exec(cname, cmd)
+            info(f"Launching Gazebo in '{cname}' (detached)...")
+            subprocess.run([
+                'docker', 'exec', '-d', cname,
+                'bash', '-ic',
+                'ros2 launch turtlebot3_gazebo empty_world.launch.py \
+                > /proc/1/fd/1 2>/proc/1/fd/2 &'
+            ], check=True)
+            self._wait_for_log(cname,r'\[spawn_entity\.py-4\]: process has finished cleanly')
+            time.sleep(TIME_DELAY)
+            done(f"Gazebo is up in '{cname}'")
 
     def spawn_robot(self) -> None:
         """
@@ -110,7 +135,7 @@ class FuzzContainer:
                         error(f"Failed to spawn robot in '{cname}'")
                         sys.exit(1)
                     info(f"Retrying spawn in '{cname}' (ATTEMPT {attempt})")
-                    time.sleep(RETRY_DELAY)
+                    time.sleep(TIME_DELAY)
 
     def delete_robot(self) -> None:
         """
@@ -135,7 +160,7 @@ class FuzzContainer:
                         error(f"Failed to delete robot in '{cname}'")
                         sys.exit(1)
                     info(f"Retrying delete in '{cname}' (ATTEMPT {attempt})")
-                    time.sleep(RETRY_DELAY)
+                    time.sleep(TIME_DELAY)
 
     def close_docker(self) -> None:
         """
