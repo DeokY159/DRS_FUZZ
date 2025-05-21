@@ -61,26 +61,17 @@ class FuzzPublisher(Node):
     """
     ROS2 Node that sends a burst of mutated RTPS packets.
     """
-    def __init__(
-        self,
-        robot: str,
-        topic_name: str,
-        rtps: RTPSPacket,
-        rmw_impl: str,
-        qos: QoSProfile,
-        src_ip: str,
-        dst_ip: str,
-        iface: str
-    ) -> None:
+    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket, rmw_impl: str, qos: QoSProfile, src_ip: str, dst_ip: str, iface: str, container: FuzzContainer) -> None:
         super().__init__('fuzzer_publisher')
-        self.robot    = robot
-        self.rtps     = rtps
-        self.rmw_impl = rmw_impl
-        self.src_ip   = src_ip
-        self.dst_ip   = dst_ip
-        self.iface    = iface
-        self.seq_num  = 1
-        self.future   = Future()
+        self.robot     = robot
+        self.rtps      = rtps
+        self.rmw_impl  = rmw_impl
+        self.src_ip    = src_ip
+        self.dst_ip    = dst_ip
+        self.iface     = iface
+        self.container = container
+        self.seq_num   = 1
+        self.future    = Future()
 
         if topic_name == 'cmd_vel':
             self.publisher = self.create_publisher(Twist, topic_name, qos)
@@ -88,6 +79,8 @@ class FuzzPublisher(Node):
         else:
             error(f"Unsupported topic '{topic_name}'")
             sys.exit(1)
+
+        container.spawn_robot()
 
         # fetch topic info for base packet
         for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
@@ -107,11 +100,13 @@ class FuzzPublisher(Node):
         self.rtps.generate_mutated_payloads(MESSAGES_PER_RUN)
 
         # timer triggers send loop
-        self.create_timer(MESSAGE_PERIOD, self._timer_callback)
+        self.timer = self.create_timer(MESSAGE_PERIOD, self._timer_callback)
 
     def _timer_callback(self) -> None:
         if self.seq_num > MESSAGES_PER_RUN:
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
+            self.timer.cancel()
+            self.container.delete_robot()
             self.future.set_result(True)
             return
 
@@ -166,7 +161,8 @@ class Fuzzer:
                 qos        = self.dds_config.get_qos(),
                 src_ip     = self.src_ip,
                 dst_ip     = self.DST_IP_MAP[rmw_impl],
-                iface      = self.iface
+                iface      = self.iface,
+                container  = self.container
             )
             rclpy.spin_until_future_complete(node, node.future)
         except Exception as e:
