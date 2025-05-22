@@ -210,10 +210,10 @@ class Fuzzer:
                     self.dds_config.update_qos()
                     info("QoS settings updated")
 
-                self.gen_packet_sender("rmw_fastrtps_cpp", 1)
+                self.gen_packet_sender("rmw_fastrtps_cpp")
                 time.sleep(RUN_DELAY)
 
-                self.gen_packet_sender("rmw_cyclonedds_cpp", 2)
+                self.gen_packet_sender("rmw_cyclonedds_cpp")
                 time.sleep(RUN_DELAY)
 
                 loop_count += MESSAGES_PER_RUN
