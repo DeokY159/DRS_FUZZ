@@ -13,9 +13,8 @@ it targets common ROS 2 communication channels and injects mutated RTPS packets 
 - **Scapy** Python module must be installed (`pip3 install scapy`).
 
 ## 🚀 Supported Configurations
-- **ROS 2 distributions:** `humble`, `jazzy`  
-- **Robot:** `turtlebot3`  
-- **Topic:** `/cmd_vel`
+- humble / turtlebot3 / cmd_vel
+- jazzy / turtlebot3 / cmd_vel 
 
 ## ▶️ Run Commands
 ```bash
