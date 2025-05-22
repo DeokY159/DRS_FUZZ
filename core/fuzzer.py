@@ -17,7 +17,7 @@ from scapy.contrib.rtps import RTPSMessage
 import core.inspector as inspector
 from core.executor import FuzzContainer
 from core.mutator import RTPSPacket, DDSConfig
-from core.ui import info, error
+from core.ui import info, error, debug
 
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 5      # retry attempts for transient failures
@@ -60,7 +60,7 @@ class FuzzPublisher(Node):
     """
     ROS2 Node that sends a burst of mutated RTPS packets.
     """
-    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket, rmw_impl: str, qos: QoSProfile, src_ip: str, dst_ip: str, dport: int, iface: str, container: FuzzContainer) -> None:
+    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket, rmw_impl: str, qos: QoSProfile, src_ip: str, dst_ip: str, dport: int, container: FuzzContainer) -> None:
         super().__init__('fuzzer_publisher')
         self.robot     = robot
         self.rtps      = rtps
@@ -68,10 +68,11 @@ class FuzzPublisher(Node):
         self.src_ip    = src_ip
         self.dst_ip    = dst_ip
         self.dport     = dport
-        self.iface     = iface
+        self.iface     = container.network_iface
         self.container = container
         self.seq_num   = 1
         self.future    = Future()
+        debug(self.iface)
 
         if topic_name == 'cmd_vel':
             self.publisher = self.create_publisher(Twist, topic_name, qos)
@@ -143,11 +144,10 @@ class Fuzzer:
         "cmd_vel": {"1": 7665, "2": 7915, "3": 8165}
     }
 
-    def __init__(self, version: str, robot: str, topic_name: str, iface: str) -> None:
+    def __init__(self, version: str, robot: str, topic_name: str) -> None:
         self.version    = version
         self.robot      = robot
         self.topic_name = topic_name
-        self.iface      = iface
 
         self.src_ip     = get_host_internal_ip()
         self.rtps       = RTPSPacket(self.topic_name)
@@ -173,7 +173,6 @@ class Fuzzer:
                 src_ip     = self.src_ip,
                 dst_ip     = self.DST_IP_MAP[rmw_impl],
                 dport      = self.DST_PORT_MAP[self.topic_name][self.DOMAIN_ID_MAP[rmw_impl]],
-                iface      = self.iface,
                 container  = self.container
             )
             rclpy.spin_until_future_complete(node, node.future)
@@ -196,13 +195,14 @@ class Fuzzer:
             self.container.delete_robot()
         except Exception as e:
             error(f"Container/Gazebo setup failed: {e}")
+            self.container.close_docker()
             sys.exit(1)
-        finally:
-            info("Deleting robot and tearing down containers")
-            #self.container.close_docker()
 
 
         # 2) main fuzz loop
+        info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+        info("Fuzz loop Entrace...")
+        info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
         loop_count = 1
         try:
             while True:
@@ -228,3 +228,4 @@ class Fuzzer:
             # 3) cleanup
             info("Deleting robot and tearing down containers")
             self.container.close_docker()
+            

@@ -14,7 +14,7 @@ class Builder:
 
     def build_docker(self, version, robot):
         tag = f"fuzzer_{version}_{robot}"
-
+        '''
         existing = subprocess.run(
             ['docker', 'images', '-q', tag],
             capture_output=True, text=True
@@ -22,7 +22,7 @@ class Builder:
         if existing:
             print(f"[Builder] Image '{tag}' already exists (id={existing}); skipping build.")
             return
-
+        '''
         # prepare result/<version>_<robot>
         target = f"{version}_{robot}"
         target_dir = os.path.join(self.result_dir, target)

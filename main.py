@@ -10,16 +10,14 @@ class Interface:
         parser.add_argument("version", help="ROS2 version (e.g., humble, jazzy)")
         parser.add_argument("robot",   help="Robot target (e.g., turtlebot3, px4)")
         parser.add_argument("topic",   help="ROS2 topic name (e.g., cmd_vel)")
-        parser.add_argument("--iface", default="ens33",
-                            help="Network interface to use (default: ens33)")
+        
         args = parser.parse_args()
         self.version = args.version
         self.robot   = args.robot
         self.topic   = args.topic
-        self.iface   = args.iface
 
         info(f"Starting fuzzer with version='{self.version}', "
-             f"robot='{self.robot}', topic='{self.topic}', interface='{self.iface}'")
+             f"robot='{self.robot}', topic='{self.topic}'")
 
 if __name__ == "__main__":
     interface = Interface()
@@ -29,7 +27,6 @@ if __name__ == "__main__":
     fuzzer = Fuzzer(
         version    = interface.version,
         robot      = interface.robot,
-        topic_name = interface.topic,
-        iface      = interface.iface
+        topic_name = interface.topic
     )
     fuzzer.run()

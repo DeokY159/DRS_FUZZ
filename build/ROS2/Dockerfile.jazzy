@@ -32,16 +32,19 @@ RUN mkdir -p ~/ros2_jazzy/src \
  && vcs import --input https://raw.githubusercontent.com/ros2/ros2/jazzy/ros2.repos src \
  && rosdep init \
  && rosdep update \
- && rosdep install --from-paths src --ignore-src -y --skip-keys "fastcdr rti-connext-dds-6.0.1 urdfdom_headers" -y \
- && cd ~/ros2_jazzy \
- && colcon build --cmake-args -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address
+ && rosdep install --from-paths src --ignore-src -y --skip-keys "fastcdr rti-connext-dds-6.0.1 urdfdom_headers" -y
+
+RUN cd ~/ros2_jazzy \
+ && MAKEFLAGS="-j1 -l1" colcon build --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address
+RUN rm -rf /var/lib/apt/lists/* && apt-get clean && apt-get update
 
 # Copy and run the robot-specific installation script
 COPY ${TARGET_ROBOT}.sh /root/${TARGET_ROBOT}.sh
-RUN chmod +x /root/${TARGET_ROBOT}.sh && /root/${TARGET_ROBOT}.sh
+RUN chmod +x /root/${TARGET_ROBOT}.sh \
+ && bash -c "source ~/ros2_jazzy/install/setup.bash && /root/${TARGET_ROBOT}.sh"
 
 ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
 ENV ASAN_OPTIONS="detect_leaks=0:new_delete_type_mismatch=0:handle_segv=0:abort_on_error=0:symbolize=1"
-RUN echo "source ~/ros2_jazzy/install/setup.bash" >> /root/.bashrc
+RUN echo "source ~/ros2_jazzy/install/setup.bash" >> /etc/bash.bashrc
 
 ENTRYPOINT ["/bin/bash"]
