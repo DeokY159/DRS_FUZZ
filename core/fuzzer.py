@@ -26,7 +26,6 @@ PACKETS_PER_QOS    = 100    # how often to rotate QoS
 MESSAGES_PER_RUN   = 10     # messages per spin run
 MESSAGE_PERIOD     = 1.0    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-CMD_VEL_DPORT      = 7415   # dest UDP port for /cmd_vel
 RUN_DELAY          = 3.0    # seconds between different RMW runs
 
 def get_host_internal_ip() -> str:
@@ -61,13 +60,14 @@ class FuzzPublisher(Node):
     """
     ROS2 Node that sends a burst of mutated RTPS packets.
     """
-    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket, rmw_impl: str, qos: QoSProfile, src_ip: str, dst_ip: str, iface: str, container: FuzzContainer) -> None:
+    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket, rmw_impl: str, qos: QoSProfile, src_ip: str, dst_ip: str, dport: int, iface: str, container: FuzzContainer) -> None:
         super().__init__('fuzzer_publisher')
         self.robot     = robot
         self.rtps      = rtps
         self.rmw_impl  = rmw_impl
         self.src_ip    = src_ip
         self.dst_ip    = dst_ip
+        self.dport     = dport
         self.iface     = iface
         self.container = container
         self.seq_num   = 1
@@ -75,7 +75,6 @@ class FuzzPublisher(Node):
 
         if topic_name == 'cmd_vel':
             self.publisher = self.create_publisher(Twist, topic_name, qos)
-            self.dport     = CMD_VEL_DPORT
         else:
             error(f"Unsupported topic '{topic_name}'")
             sys.exit(1)
@@ -131,6 +130,17 @@ class Fuzzer:
     DST_IP_MAP = {
         "rmw_fastrtps_cpp":   "192.168.10.10",
         "rmw_cyclonedds_cpp": "192.168.10.20",
+        #"rmw_opendds_cpp": "192.168.10.30",
+    }
+
+    DOMAIN_ID_MAP = {
+        "rmw_fastrtps_cpp":   "1",
+        "rmw_cyclonedds_cpp": "2",
+        # "rmw_opendds_cpp":   "3",
+    }
+
+    DST_PORT_MAP = { # topic_name : {"domain_id": dport}
+        "cmd_vel": {"1": 7665, "2": 7915, "3": 8165}
     }
 
     def __init__(self, version: str, robot: str, topic_name: str, iface: str) -> None:
@@ -147,6 +157,7 @@ class Fuzzer:
     def gen_packet_sender(self, rmw_impl: str) -> None:
         """Instantiate and run the FuzzPublisher node once."""
         os.environ["RMW_IMPLEMENTATION"] = rmw_impl
+        os.environ["ROS_DOMAIN_ID"] = self.DOMAIN_ID_MAP[rmw_impl]
         if not rclpy.ok():
             rclpy.init()
         info(f"Running RMW implementation: {rmw_impl}")
@@ -161,6 +172,7 @@ class Fuzzer:
                 qos        = self.dds_config.get_qos(),
                 src_ip     = self.src_ip,
                 dst_ip     = self.DST_IP_MAP[rmw_impl],
+                dport      = self.DST_PORT_MAP[self.topic_name][self.DOMAIN_ID_MAP[rmw_impl]],
                 iface      = self.iface,
                 container  = self.container
             )
