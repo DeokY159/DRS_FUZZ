@@ -192,7 +192,7 @@ class Fuzzer:
             info(f"Bringing up containers & Gazebo for {self.version}/{self.robot}")
             self.container.run_docker()
             self.container.run_gazebo()
-            self.container.delete_robot()
+            #self.container.delete_robot()
         except Exception as e:
             error(f"Container/Gazebo setup failed: {e}")
             self.container.close_docker()

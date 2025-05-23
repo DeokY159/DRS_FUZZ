@@ -4,6 +4,7 @@ import os
 import random
 import time
 import subprocess
+from core.ui import debug
 
 
 from rclpy.qos import (
@@ -120,7 +121,8 @@ class RTPSPacket:
     # Available mutation strategies and their default weights
     STRATEGY_SETTINGS = [
         {"func": bit_flip,         "weight": 1},
-        {"func": byte_flip,        "weight": 1},
+        {"func": byte_flip,        "weight": 0},
+        #{"func": byte_flip,        "weight": 1},
         {"func": interesting_byte, "weight": 1},
         {"func": arithmetic,       "weight": 1},
         {"func": swap_bytes,       "weight": 1},
@@ -276,6 +278,9 @@ class RTPSPacket:
             arr = bytearray(self.seed_payload)
             self.packet_mutation_strategy(arr, self.bound)
             self.mutated_payloads.append(bytes(arr))
+            debug(self.packet_mutation_strategy)
+            debug(self.mutated_payloads)
+
 
     def build_base_packet(self, rmw_impl: str, inspect_info: str) -> None:
         """

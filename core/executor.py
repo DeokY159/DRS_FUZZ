@@ -113,7 +113,7 @@ class FuzzContainer:
                 'ros2 launch turtlebot3_gazebo empty_world.launch.py \
                 > /proc/1/fd/1 2>/proc/1/fd/2 &'
             ], check=True)
-            self._wait_for_log(cname,r'\[spawn_entity\.py-4\]: process has finished cleanly')
+            self._wait_for_log(cname,r'process has finished cleanly')
             time.sleep(TIME_DELAY)
             done(f"Gazebo is up in '{cname}'")
 
@@ -148,7 +148,7 @@ class FuzzContainer:
             # wait for the spawn to complete in logs
             self._wait_for_log(
                 cname,
-                r'\[spawn_entity\.py-4\]: process has finished cleanly'
+                r'process has finished cleanly'
             )
             time.sleep(TIME_DELAY)
             done(f"Robot spawned in '{cname}'")
@@ -165,11 +165,13 @@ class FuzzContainer:
             info(f"Deleting robot in '{cname}' (detached)...")
 
             delete_args = f"{{name: '{self.ROBOT_MODELS[self.robot]}'}}"
+            
             delete_cmd = (
                 "ros2 service call /delete_entity "
                 "gazebo_msgs/srv/DeleteEntity "
                 f"\"{delete_args}\" > /proc/1/fd/1 2>/proc/1/fd/2 &"
             )
+            debug(delete_cmd)
 
             subprocess.run([
                 'docker', 'exec', '-d', cname,
