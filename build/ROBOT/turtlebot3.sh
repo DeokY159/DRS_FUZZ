@@ -19,4 +19,5 @@ colcon build --parallel-worker 1 --cmake-args -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C
 
 echo "export TURTLEBOT3_MODEL=burger"             | sudo tee -a /etc/bash.bashrc
 echo "source ~/turtlebot3_ws/install/setup.bash"  | sudo tee -a /etc/bash.bashrc
+echo "source /usr/share/gazebo/setup.sh"       | sudo tee -a /etc/bash.bashrc
 echo "source /usr/share/gazebo-11/setup.sh"       | sudo tee -a /etc/bash.bashrc

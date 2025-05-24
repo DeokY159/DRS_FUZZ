@@ -4,6 +4,7 @@ import os
 import socket
 import sys
 import time
+import datetime
 
 import rclpy
 from rclpy.node import Node
@@ -27,6 +28,20 @@ MESSAGES_PER_RUN   = 10     # messages per spin run
 MESSAGE_PERIOD     = 1.0    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
 RUN_DELAY          = 3.0    # seconds between different RMW runs
+
+# base directories
+OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
+LOGS_DIR      = os.path.join(OUTPUT_DIR, 'logs')
+CRASH_DIR     = os.path.join(OUTPUT_DIR, 'crash')
+STATE_LOG     = os.path.join(LOGS_DIR, 'current_state.log')
+
+# ensure output directories exist
+os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(CRASH_DIR, exist_ok=True)
+
+# initialize state log (clear or create)
+with open(STATE_LOG, 'w') as f:
+    f.write(f"{datetime.datetime.now().isoformat()} - Fuzzing state log created\n")
 
 def get_host_internal_ip() -> str:
     """Get host IP by opening a UDP socket to the internet."""
@@ -60,7 +75,9 @@ class FuzzPublisher(Node):
     """
     ROS2 Node that sends a burst of mutated RTPS packets.
     """
-    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket, rmw_impl: str, qos: QoSProfile, src_ip: str, dst_ip: str, dport: int, container: FuzzContainer) -> None:
+    def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket,
+                 rmw_impl: str, qos: QoSProfile, src_ip: str,
+                 dst_ip: str, dport: int, container: FuzzContainer) -> None:
         super().__init__('fuzzer_publisher')
         self.robot     = robot
         self.rtps      = rtps
@@ -72,6 +89,7 @@ class FuzzPublisher(Node):
         self.container = container
         self.seq_num   = 1
         self.future    = Future()
+        self.qos       = qos
         debug(self.iface)
 
         if topic_name == 'cmd_vel':
@@ -94,13 +112,21 @@ class FuzzPublisher(Node):
                 info("Retrying get_topic_info()")
                 time.sleep(RETRY_DELAY)
 
-        # prepare mutated payloads
+        # prepare mutation strategy and payloads
         self.rtps.build_base_packet(rmw_impl=rmw_impl, inspect_info=inspect_info)
         self.rtps.update_packet_mutation_strategy()
+        strat   = self.rtps.packet_mutation_strategy
+        weights = {s['func'].__name__: s['weight'] for s in self.rtps.strategies}
+        # append to state log
+        with open(STATE_LOG, 'a') as f:
+            f.write(f"{datetime.datetime.now().isoformat()} - Mutation strategy: {strat.__name__}, weights: {weights}\n")
+
         self.rtps.generate_mutated_payloads(MESSAGES_PER_RUN)
 
-        for idx, payload in enumerate(self.mutated_payloads, start=1):
-            path = f"./payload_{idx}.bin"
+        # save mutated payloads to output/logs
+        for idx, payload in enumerate(self.rtps.mutated_payloads, start=1):
+            filename = f"mutated_{idx}.bin"
+            path = os.path.join(LOGS_DIR, filename)
             with open(path, "wb") as fp:
                 fp.write(payload)
 
@@ -131,21 +157,20 @@ class Fuzzer:
       1) bring up Docker+Gazebo
       2) spawn robot in containers
       3) cycle through RMW impls and launch FuzzPublisher
-      4) cleanup robot and containers
+      4) detect ASAN crashes and save data
+      5) cleanup
     """
     DST_IP_MAP = {
         "rmw_fastrtps_cpp":   "192.168.10.10",
         "rmw_cyclonedds_cpp": "192.168.10.20",
-        #"rmw_opendds_cpp": "192.168.10.30",
     }
 
     DOMAIN_ID_MAP = {
         "rmw_fastrtps_cpp":   "1",
         "rmw_cyclonedds_cpp": "2",
-        # "rmw_opendds_cpp":   "3",
     }
 
-    DST_PORT_MAP = { # topic_name : {"domain_id": dport}
+    DST_PORT_MAP = {
         "cmd_vel": {"1": 7665, "2": 7915, "3": 8165}
     }
 
@@ -154,18 +179,78 @@ class Fuzzer:
         self.robot      = robot
         self.topic_name = topic_name
 
+        # initialize state counters
+        self.crash_count = 0
+        self.run_count   = 0
+
         self.src_ip     = get_host_internal_ip()
         self.rtps       = RTPSPacket(self.topic_name)
         self.dds_config = DDSConfig()
         self.container  = FuzzContainer(self.version, self.robot, self.DST_IP_MAP)
 
+        # log initial state to state log
+        msg = f"Initial state: version={self.version}, robot={self.robot}, topic={self.topic_name}"
+        info(msg)
+        with open(STATE_LOG, 'a') as f:
+            f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
+
+    def _check_asan(self, log_path: str) -> bool:
+        """Check if ASAN error appears in given log file."""
+        try:
+            with open(log_path, 'r', errors='ignore') as f:
+                data = f.read()
+                return 'AddressSanitizer' in data or 'asan:' in data
+        except Exception:
+            return False
+
+    def _handle_crash(self) -> None:
+        """Save crash data (packets and QoS) to timestamped folder."""
+        self.crash_count += 1
+        timestamp   = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        crash_base  = os.path.join(CRASH_DIR, timestamp)
+        packets_dir = os.path.join(crash_base, 'packets')
+        os.makedirs(packets_dir, exist_ok=True)
+
+        # save all mutated payloads
+        for idx, payload in enumerate(self.rtps.mutated_payloads, start=1):
+            path = os.path.join(packets_dir, f"mutated_{idx}.bin")
+            with open(path, 'wb') as fp:
+                fp.write(payload)
+
+        # save QoS settings
+        qos_file = os.path.join(crash_base, 'qos.txt')
+        with open(qos_file, 'w') as fp:
+            fp.write(repr(self.dds_config.get_qos()))
+
+        msg = f"Crash #{self.crash_count} detected; data saved to {crash_base}"
+        info(msg)
+        with open(STATE_LOG, 'a') as f:
+            f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
+
+    def _detect_and_handle(self) -> bool:
+        """Check ASAN in container logs and handle crash."""
+        for dds_name in self.DST_IP_MAP:
+            cname    = f"{self.version}_{self.robot}_{dds_name}"
+            log_path = os.path.join(LOGS_DIR, f"{cname}.log")
+            if self._check_asan(log_path):
+                error(f"ASAN detected in container {cname}")
+                self._handle_crash()
+                self.container.delete_robot()
+                self.container.close_docker()
+                return True
+        return False
+
     def gen_packet_sender(self, rmw_impl: str) -> None:
         """Instantiate and run the FuzzPublisher node once."""
         os.environ["RMW_IMPLEMENTATION"] = rmw_impl
-        os.environ["ROS_DOMAIN_ID"] = self.DOMAIN_ID_MAP[rmw_impl]
+        os.environ["ROS_DOMAIN_ID"]      = self.DOMAIN_ID_MAP[rmw_impl]
         if not rclpy.ok():
             rclpy.init()
-        info(f"Running RMW implementation: {rmw_impl}")
+        self.run_count += 1
+        msg = f"Run #{self.run_count}: RMW implementation = {rmw_impl}"
+        info(msg)
+        with open(STATE_LOG, 'a') as f:
+            f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
 
         node = None
         try:
@@ -189,24 +274,20 @@ class Fuzzer:
             if rclpy.ok():
                 rclpy.shutdown()
 
-        info(f"Completed RMW='{rmw_impl}' run\n")
-
     def run(self) -> None:
-        # 1) start containers and Gazebo, spawn robot
+        # 1) start containers and Gazebo
         try:
             info(f"Bringing up containers & Gazebo for {self.version}/{self.robot}")
             self.container.run_docker()
             self.container.run_gazebo()
-            #self.container.delete_robot()
         except Exception as e:
             error(f"Container/Gazebo setup failed: {e}")
             self.container.close_docker()
             sys.exit(1)
 
-
         # 2) main fuzz loop
         info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-        info("Fuzz loop Entrace...")
+        info("Fuzz loop Entrance...")
         info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
         loop_count = 1
         try:
@@ -215,10 +296,16 @@ class Fuzzer:
                     self.dds_config.update_qos()
                     info("QoS settings updated")
 
+                # first implementation
                 self.gen_packet_sender("rmw_fastrtps_cpp")
+                if self._detect_and_handle():
+                    return
                 time.sleep(RUN_DELAY)
 
+                # second implementation
                 self.gen_packet_sender("rmw_cyclonedds_cpp")
+                if self._detect_and_handle():
+                    return
                 time.sleep(RUN_DELAY)
 
                 loop_count += MESSAGES_PER_RUN
@@ -233,4 +320,3 @@ class Fuzzer:
             # 3) cleanup
             info("Deleting robot and tearing down containers")
             self.container.close_docker()
-            

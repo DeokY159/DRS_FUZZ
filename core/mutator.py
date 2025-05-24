@@ -278,8 +278,6 @@ class RTPSPacket:
             arr = bytearray(self.seed_payload)
             self.packet_mutation_strategy(arr, self.bound)
             self.mutated_payloads.append(bytes(arr))
-            debug(self.packet_mutation_strategy)
-            debug(self.mutated_payloads)
 
 
     def build_base_packet(self, rmw_impl: str, inspect_info: str) -> None:

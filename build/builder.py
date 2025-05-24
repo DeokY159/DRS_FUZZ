@@ -9,12 +9,12 @@ class Builder:
     def __init__(self):
         self.root_dir = os.getcwd()
         self.build_dir = os.path.join(self.root_dir, 'build')
-        self.result_dir = os.path.join(self.root_dir, 'result')
-        os.makedirs(self.result_dir, exist_ok=True)
+        self.cache_dir = os.path.join(self.build_dir, 'cache')
+        os.makedirs(self.cache_dir, exist_ok=True)
 
     def build_docker(self, version, robot):
         tag = f"fuzzer_{version}_{robot}"
-        '''
+        
         existing = subprocess.run(
             ['docker', 'images', '-q', tag],
             capture_output=True, text=True
@@ -22,10 +22,10 @@ class Builder:
         if existing:
             print(f"[Builder] Image '{tag}' already exists (id={existing}); skipping build.")
             return
-        '''
-        # prepare result/<version>_<robot>
+        
+        # prepare cache/<version>_<robot>
         target = f"{version}_{robot}"
-        target_dir = os.path.join(self.result_dir, target)
+        target_dir = os.path.join(self.cache_dir, target)
         if os.path.exists(target_dir):
             shutil.rmtree(target_dir)
         os.makedirs(target_dir)
