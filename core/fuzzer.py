@@ -99,6 +99,11 @@ class FuzzPublisher(Node):
         self.rtps.update_packet_mutation_strategy()
         self.rtps.generate_mutated_payloads(MESSAGES_PER_RUN)
 
+        for idx, payload in enumerate(self.mutated_payloads, start=1):
+            path = f"./payload_{idx}.bin"
+            with open(path, "wb") as fp:
+                fp.write(payload)
+
         # timer triggers send loop
         self.timer = self.create_timer(MESSAGE_PERIOD, self._timer_callback)
 
