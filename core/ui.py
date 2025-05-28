@@ -1,3 +1,5 @@
+# core/ui.py
+
 import os
 import logging
 
@@ -5,18 +7,7 @@ import logging
 logs_dir = os.path.join(os.getcwd(), 'output', 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
-# configure main logger
-main_log = os.path.join(logs_dir, 'main.log')
-logger = logging.getLogger('fuzzer')
-logger.setLevel(logging.DEBUG)
-
-# file handler for main.log
-fh = logging.FileHandler(main_log)
-fh.setLevel(logging.DEBUG)
-fh.setFormatter(logging.Formatter('[FUZZER %(levelname)s] %(message)s'))
-logger.addHandler(fh)
-
-# console handler with colors
+# --- 1) Define ColorFormatter so both console and file handlers can use it ---
 class ColorFormatter(logging.Formatter):
     LEVEL_COLOR = {
         'INFO':    '\033[94m',
@@ -26,16 +17,30 @@ class ColorFormatter(logging.Formatter):
         'DONE':    '\033[92m',
     }
     RESET = '\033[0m'
+
     def format(self, record):
         color = self.LEVEL_COLOR.get(record.levelname, '')
         prefix = f"{color}[FUZZER {record.levelname}]{self.RESET}"
         return f"{prefix} {record.getMessage()}"
 
+# --- 2) Configure main logger ---
+main_log = os.path.join(logs_dir, 'main.log')
+logger   = logging.getLogger('fuzzer')
+logger.setLevel(logging.DEBUG)
+
+# File handler: overwrite (mode='w') each run and include ANSI color codes
+fh = logging.FileHandler(main_log, mode='w')
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(ColorFormatter())
+logger.addHandler(fh)
+
+# Console handler: colored output
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 ch.setFormatter(ColorFormatter())
 logger.addHandler(ch)
 
+# --- 3) Logging utility functions ---
 def info(message):
     logger.info(message)
 

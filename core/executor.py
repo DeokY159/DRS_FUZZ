@@ -1,3 +1,4 @@
+# core/executor.py
 import subprocess
 import os
 import sys
@@ -9,6 +10,9 @@ from core.ui import info, error, warn, done, debug
 
 RETRY_MAX_ATTEMPTS = 5
 TIME_DELAY        = 1.0
+DOCKER_CPU_CORES  = "4"
+DOCKER_MEMORY     = "8g"
+DOCKER_MEM_SWAP   = "8g"
 
 class FuzzContainer:
     """
@@ -35,7 +39,7 @@ class FuzzContainer:
             raise
 
     def _wait_for_log(self, container: str, pattern: str, timeout: float = 30.0) -> None:
-        warn(f"Waiting for log pattern '{pattern}' in '{container}'")
+        debug(f"Waiting for log pattern '{pattern}' in '{container}'")
         proc = Popen(['docker', 'logs', '-f', container], stdout=PIPE, stderr=PIPE, text=True)
         start = time.time()
         try:
@@ -83,12 +87,17 @@ class FuzzContainer:
                     '-e', f"ROS_DOMAIN_ID={domain_id}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
                     '--net', self.network_name, '--ip', dds_ip,
+                    '--cpus', DOCKER_CPU_CORES,
+                    '--memory', DOCKER_MEMORY,
+                    '--memory-swap', DOCKER_MEM_SWAP,
                     '--name', cname, self.image_tag,
                     '-c','tail -f /dev/null'
                 ], check=True)
 
                 # capture logs to output/logs/{container}.log
                 log_path = os.path.join(logs_dir, f"{cname}.log")
+                with open(log_path,'w'): # initial data
+                    pass
                 log_file = open(log_path, 'a')  # append mode
                 proc = Popen(['docker', 'logs', '-f', cname], stdout=log_file, stderr=log_file, text=True)
                 self.log_procs.append((proc, log_file))
@@ -111,45 +120,44 @@ class FuzzContainer:
             self._wait_for_log(cname, r'process has finished cleanly')
             time.sleep(TIME_DELAY)
             done(f"Gazebo is up in '{cname}'")
+            self.delete_robot(dds_name)
+            time.sleep(TIME_DELAY)
 
-    def spawn_robot(self) -> None:
+    def spawn_robot(self,dds_name) -> None:
         if self.robot not in self.ROBOT_MODELS:
             error(f"Unsupported robot: '{self.robot}'")
             sys.exit(1)
+        
+        cname = f"{self.version}_{self.robot}_{dds_name}"
+        info(f"Spawning robot in '{cname}' (detached)...")
+        sdf = f"/root/turtlebot3_ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models/turtlebot3_{self.ROBOT_MODELS[self.robot]}/model.sdf"
+        cmd = (
+            "ros2 run gazebo_ros spawn_entity.py "
+            f"-entity {self.ROBOT_MODELS[self.robot]} "
+            f"-file {sdf} -x 0.0 -y 0.0 -z 0.01 "
+            "> /proc/1/fd/1 2>/proc/1/fd/2 &"
+        )
+        subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
+        self._wait_for_log(cname, r'process has finished cleanly')
+        time.sleep(TIME_DELAY)
+        done(f"Robot spawned in '{cname}'")
 
-        for dds_name in self.dds_map:
-            cname = f"{self.version}_{self.robot}_{dds_name}"
-            info(f"Spawning robot in '{cname}' (detached)...")
-            sdf = f"/root/turtlebot3_ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models/turtlebot3_{self.ROBOT_MODELS[self.robot]}/model.sdf"
-            debug(sdf)
-            cmd = (
-                "ros2 run gazebo_ros spawn_entity.py "
-                f"-entity {self.ROBOT_MODELS[self.robot]} "
-                f"-file {sdf} -x 0.0 -y 0.0 -z 0.01 "
-                "> /proc/1/fd/1 2>/proc/1/fd/2 &"
-            )
-            subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
-            self._wait_for_log(cname, r'process has finished cleanly')
-            time.sleep(TIME_DELAY)
-            done(f"Robot spawned in '{cname}'")
-
-    def delete_robot(self) -> None:
+    def delete_robot(self,dds_name) -> None:
         if self.robot not in self.ROBOT_MODELS:
             return
 
-        for dds_name in self.dds_map:
-            cname = f"{self.version}_{self.robot}_{dds_name}"
-            info(f"Deleting robot in '{cname}' (detached)...")
-            args = f"{{name: '{self.ROBOT_MODELS[self.robot]}'}}"
-            cmd = (
-                "ros2 service call /delete_entity "
-                "gazebo_msgs/srv/DeleteEntity "
-                f"\"{args}\" > /proc/1/fd/1 2>/proc/1/fd/2 &"
-            )
-            subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
-            self._wait_for_log(cname, r'Successfully deleted entity')
-            time.sleep(TIME_DELAY)
-            done(f"Robot deleted in '{cname}'")
+        cname = f"{self.version}_{self.robot}_{dds_name}"
+        info(f"Deleting robot in '{cname}' (detached)...")
+        args = f"{{name: '{self.ROBOT_MODELS[self.robot]}'}}"
+        cmd = (
+            "ros2 service call /delete_entity "
+            "gazebo_msgs/srv/DeleteEntity "
+            f"\"{args}\" > /proc/1/fd/1 2>/proc/1/fd/2 &"
+        )
+        subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
+        self._wait_for_log(cname, r'Successfully deleted entity')
+        time.sleep(TIME_DELAY)
+        done(f"Robot deleted in '{cname}'")
 
     def close_docker(self) -> None:
         # stop capturing logs

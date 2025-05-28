@@ -1,4 +1,18 @@
 # main.py
+import shutil
+from pathlib import Path
+
+output_dir = Path(__file__).resolve().parent / 'output'
+if output_dir.exists():
+    for entry in output_dir.iterdir():
+        if entry.name == 'crash':
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+
+
 import argparse
 from build.builder import Builder
 from core.fuzzer import Fuzzer

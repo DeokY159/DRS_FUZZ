@@ -47,8 +47,16 @@ def hexdump(path: str, width: int = 16, max_lines: int = 4) -> str:
 
 def parse_state_log():
     """Parse current_state.log into structured state info."""
-    state = {'version': None, 'robot': None, 'topic': None,
-             'strategy': None, 'weights': {}, 'runs': 0, 'crashes': 0}
+    state = {
+        'version': None,
+        'robot': None,
+        'topic': None,
+        'strategy': None,
+        'weights': {},
+        'stage': 0,
+        'round': 0,
+        'crashes': 0
+    }
     try:
         with open(STATE_LOG, 'r') as f:
             for line in f:
@@ -67,12 +75,24 @@ def parse_state_log():
                         state['weights'] = eval(w_part.strip())
                     except:
                         state['weights'] = {}
-                elif msg.startswith('Run #'):
-                    num = msg.split(':')[0].lstrip('Run #')
-                    state['runs'] = max(state['runs'], int(num)) if num.isdigit() else state['runs']
+                elif msg.startswith('Stage '):
+                    num = msg.split()[1]
+                    if num.isdigit():
+                        # 마지막으로 읽은 Stage 값을 그대로 사용
+                        state['stage'] = int(num)
+                elif msg.startswith('Round '):
+                    num = msg.split()[1]
+                    if num.isdigit():
+                        # 마지막으로 읽은 Round 값을 그대로 사용
+                        state['round'] = int(num)
                 elif msg.startswith('Crash #'):
-                    num = msg.split()[0].lstrip('Crash #')
-                    state['crashes'] = max(state['crashes'], int(num)) if num.isdigit() else state['crashes']
+                    # Extract crash number correctly
+                    # Format: "Crash #N detected; ..."
+                    parts = msg.split()
+                    if len(parts) >= 2 and parts[1].startswith('#'):
+                        num = parts[1][1:]  # Remove '#' prefix
+                        if num.isdigit():
+                            state['crashes'] = int(num)
     except Exception:
         pass
     return state
@@ -84,57 +104,39 @@ def create_mutated_panels_layout(bins):
         return Panel('— no mutated packets —', title='Mutated Packets', border_style='green')
     
     bins = bins[-10:]
-    
     left_panels = []
     right_panels = []
-    
     for i, path in enumerate(bins):
         title = os.path.basename(path)
         d = hexdump(path, max_lines=10)
         panel = Panel(Text(d or '— empty —'), title=title, border_style='green')
-        
         if i % 2 == 0:
             left_panels.append(panel)
         else:
             right_panels.append(panel)
-    
     while len(left_panels) < 5:
         left_panels.append(Panel('', title='', border_style='green'))
     while len(right_panels) < 5:
         right_panels.append(Panel('', title='', border_style='green'))
-    
+
     mutated_layout = Layout()
     mutated_layout.split_row(
         Layout(name='left_col', minimum_size=25, size=83),
         Layout(name='right_col', minimum_size=25, size=83)
     )
-    
-
     left_layout = Layout()
     left_layout.split_column(
-        Layout(name='left_0', minimum_size=5, size=6),
-        Layout(name='left_1', minimum_size=5, size=6),
-        Layout(name='left_2', minimum_size=5, size=6),
-        Layout(name='left_3', minimum_size=5, size=6),
-        Layout(name='left_4', minimum_size=5, size=6)
+        *(Layout(name=f'left_{i}', minimum_size=5, size=6) for i in range(5))
     )
-
     right_layout = Layout()
     right_layout.split_column(
-        Layout(name='right_0', minimum_size=5, size=6),
-        Layout(name='right_1', minimum_size=5, size=6),
-        Layout(name='right_2', minimum_size=5, size=6),
-        Layout(name='right_3', minimum_size=5, size=6),
-        Layout(name='right_4', minimum_size=5, size=6)
+        *(Layout(name=f'right_{i}', minimum_size=5, size=6) for i in range(5))
     )
-    
     for i in range(5):
         left_layout[f'left_{i}'].update(left_panels[i])
         right_layout[f'right_{i}'].update(right_panels[i])
-    
     mutated_layout['left_col'].update(left_layout)
     mutated_layout['right_col'].update(right_layout)
-    
     return mutated_layout
 
 
@@ -144,12 +146,10 @@ def create_layout() -> Layout:
         Layout(name='left', minimum_size=130, size=130),
         Layout(name='right', minimum_size=170, size=170)
     )
-    
     layout['left'].split_column(
         Layout(name='state', minimum_size=15, size=15),
         Layout(name='main', minimum_size=60, size=60)
     )
-    
     layout['right'].split_column(
         Layout(name='mutated', minimum_size=30, size=30),
         Layout(name='containers', minimum_size=30, size=45)
@@ -159,28 +159,25 @@ def create_layout() -> Layout:
     st = Table.grid(padding=(0,1))
     st.add_column(justify='right', style='cyan', no_wrap=True, width=12)
     st.add_column(style='white', no_wrap=True, max_width=30)
-    
+
     def truncate(text, max_len=50):
         return text[:max_len] + '...' if len(text) > max_len else text
-    
+
     st.add_row('Version:', truncate(info.get('version') or 'N/A'))
     st.add_row('Robot:', truncate(info.get('robot') or 'N/A'))
     st.add_row('Topic:', truncate(info.get('topic') or 'N/A'))
     st.add_row('Strategy:', truncate(info.get('strategy') or 'N/A'))
-    for fn, w in list(info.get('weights', {}).items()):
+    for fn, w in info.get('weights', {}).items():
         st.add_row(f'  {fn}:', str(w))
-    st.add_row('Runs:', str(info.get('runs', 0)))
+    st.add_row('Stage:', str(info.get('stage', 0)))
+    st.add_row('Round:', str(info.get('round', 0)))
     st.add_row('Crashes:', str(info.get('crashes', 0)))
     layout['left']['state'].update(Panel(st, title='Fuzzing State', border_style='cyan'))
 
     main_txt = tail(os.path.join(LOGS_DIR, 'main.log'), 60) or '— no main log —'
-    main_lines = []
-    for line in main_txt.split('\n')[:60]:
-        if len(line) > 120:
-            line = line[:117] + '...'
-        main_lines.append(line)
-    main_txt = '\n'.join(main_lines)
-    layout['left']['main'].update(Panel(Text(main_txt), title='Main Log', border_style='cyan'))
+    layout['left']['main'].update(
+        Panel(Text.from_ansi(main_txt), title='Main Log', border_style='cyan')
+    )
 
     bins = sorted(glob.glob(os.path.join(LOGS_DIR, 'mutated_*.bin')))
     mutated_layout = create_mutated_panels_layout(bins)
@@ -190,24 +187,22 @@ def create_layout() -> Layout:
     log_files = sorted(glob.glob(os.path.join(LOGS_DIR, '*.log')))
     for path in log_files[:3]:
         name = os.path.basename(path)
-        if name in ('main.log', 'current_state.log'): 
+        if name in ('main.log', 'current_state.log'):
             continue
-        c = tail(path, 42) or '— empty —'
-        c_lines = []
-        for line in c.split('\n')[:42]:
-            if len(line) > 78:
-                line = line[:74] + '...'
-            c_lines.append(line)
-        c = '\n'.join(c_lines)
-        
-        short_name = name
-        log_panels.append(Panel(Text(c), title=short_name, border_style='magenta'))
-    
+        raw = tail(path, 42) or '— empty —'
+        # interpret ANSI color codes
+        panel_text = Text.from_ansi(raw)
+        log_panels.append(
+            Panel(panel_text, title=name, border_style='magenta')
+        )
     if log_panels:
-        layout['right']['containers'].update(Columns(log_panels, equal=True, expand=False, width=81))
+        layout['right']['containers'].update(
+            Columns(log_panels, equal=True, expand=False, width=81)
+        )
     else:
-        layout['right']['containers'].update(Panel('— no containers —', title='Containers', border_style='magenta'))
-
+        layout['right']['containers'].update(
+            Panel('— no containers —', title='Containers', border_style='magenta')
+        )
     return layout
 
 
@@ -215,9 +210,8 @@ def main():
     console = Console()
     console.print('[bold]Starting TUI (fixed size)... Ctrl+C to exit[/]')
     time.sleep(1)
-    
     try:
-        with Live(create_layout(), refresh_per_second=1, screen=True, console=console, 
+        with Live(create_layout(), refresh_per_second=1, screen=True, console=console,
                   vertical_overflow="crop") as live:
             while True:
                 live.update(create_layout())
