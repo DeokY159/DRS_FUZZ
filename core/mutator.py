@@ -7,7 +7,6 @@ import time
 import subprocess
 from core.ui import debug
 
-
 from rclpy.qos import (
     QoSProfile,
     DurabilityPolicy,
@@ -301,6 +300,27 @@ class RTPSPacket:
         self.ts   = self._build_info_ts()
         self.data = self._build_data()
 
+    def mutate_packet_fields(self):
+        # 1. RTPS header
+        self.hdr.protocolVersion.major = random.randint(0, 255)
+        self.hdr.protocolVersion.minor = random.randint(0, 255)
+        self.hdr.vendorId.vendor_id = random.randint(0, 0xFFFF)
+        # 2. INFO_TS
+        self.ts.ts_seconds = random.randint(0, 0xFFFFFFFF)
+        self.ts.ts_fraction = random.randint(0, 0xFFFFFFFF)
+        self.ts.submessageFlags = random.randint(0, 255)
+        self.ts.octetsToNextHeader = random.randint(0, 64)
+        # 3. DATA submessage
+        self.data.submessageFlags = random.randint(0, 255)
+        self.data.octetsToNextHeader = random.randint(0, 128)
+        self.data.extraFlags = random.randint(0, 255)
+        self.data.octetsToInlineQoS = random.randint(0, 64)
+        self.data.writerSeqNumHi = random.randint(0, 0xFFFFFFFF)
+        # writerSeqNumLow/serializedData는 mutate_packet에서 관리
+        # 4. DATA 내부
+        self.data.data.encapsulationKind = random.randint(0, 0xFFFF)
+        self.data.data.encapsulationOptions = random.randint(0, 0xFFFF)
+
     def mutate_packet(self, seq_num: int) -> None:
         """
         Update self.data (and self.ts) with:
@@ -312,6 +332,8 @@ class RTPSPacket:
             self.ts = self._build_info_ts()
             self.data.data.serializedData = self.mutated_payloads[seq_num - 1]
             self.data.writerSeqNumLow = seq_num
+            # more field mutate option
+            #self.mutate_packet_fields()
         except AttributeError as e:
             raise AttributeError(f"Base packet is not initialized before mutation: {e}") from e
         except IndexError as e:
@@ -333,43 +355,50 @@ class DDSConfig:
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
         {
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.AUTOMATIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
         {
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.AUTOMATIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.AUTOMATIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            "weight": 1,
+            #"weight": 1,
+            "weight": 0,
         },
     ]
 

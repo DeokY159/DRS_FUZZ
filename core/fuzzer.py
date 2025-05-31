@@ -341,15 +341,10 @@ class Fuzzer:
                     with open(path, "wb") as fp:
                         fp.write(payload)
 
-                # first implementation
-                self.gen_packet_sender("rmw_fastrtps_cpp", self.rtps.mutated_payloads)
-                self._detect_and_handle()
-                time.sleep(RUN_DELAY)
-
-                # second implementation
-                self.gen_packet_sender("rmw_cyclonedds_cpp", self.rtps.mutated_payloads)
-                self._detect_and_handle()
-                time.sleep(RUN_DELAY)
+                for rmw_impl in self.DST_IP_MAP.keys():
+                    self.gen_packet_sender(rmw_impl, self.rtps.mutated_payloads)
+                    self._detect_and_handle()
+                    time.sleep(RUN_DELAY)
 
                 with open(STATE_LOG, 'a') as f:
                     f.write(f"{datetime.datetime.now().isoformat()} - Round {self.round}\n")
