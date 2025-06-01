@@ -312,10 +312,8 @@ class RTPSPacket:
         self.ts.octetsToNextHeader = random.randint(0, 64)
         # 3. DATA submessage
         self.data.submessageFlags = random.randint(0, 255)
-        self.data.octetsToNextHeader = random.randint(0, 128)
         self.data.extraFlags = random.randint(0, 255)
         self.data.octetsToInlineQoS = random.randint(0, 64)
-        self.data.writerSeqNumHi = random.randint(0, 0xFFFFFFFF)
         # writerSeqNumLow/serializedData는 mutate_packet에서 관리
         # 4. DATA 내부
         self.data.data.encapsulationKind = random.randint(0, 0xFFFF)

@@ -12,8 +12,8 @@ class Builder:
         self.cache_dir = os.path.join(self.build_dir, 'cache')
         os.makedirs(self.cache_dir, exist_ok=True)
 
-    def build_docker(self, version, robot):
-        tag = f"fuzzer_{version}_{robot}"
+    def build_docker(self, version, robot, headless=False):
+        tag = f"fuzzer_{version}_{robot}_headless" if headless else f"fuzzer_{version}_{robot}"
         
         existing = subprocess.run(
             ['docker', 'images', '-q', tag],
@@ -35,18 +35,23 @@ class Builder:
         dst_df = os.path.join(target_dir, 'Dockerfile')
         shutil.copy(src_df, dst_df)
 
-        # copy robot script
-        src_robot = os.path.join(self.build_dir, 'ROBOT', f'{robot}.sh')
-        dst_robot = os.path.join(target_dir, f'{robot}.sh')
+        # determine robot script (headless-aware)
+        robot_script_name = f"{robot}.headless.sh" if headless else f"{robot}.sh"
+        src_robot = os.path.join(self.build_dir, 'ROBOT', robot_script_name)
+        dst_robot = os.path.join(target_dir, robot_script_name)
+
+        if not os.path.exists(src_robot):
+            raise FileNotFoundError(f"[Builder] Robot script not found: {src_robot}")
+        
         shutil.copy(src_robot, dst_robot)
 
         # build Docker image
-        print(f"[Builder] Building DDS image: {tag}")
+        print(f"[Builder] Building DDS image: {tag} (headless={headless})")
         subprocess.run([
             'docker', 'build',
             f'--memory={BUILD_MEMORY}',
             f'--memory-swap={BUILD_MEMORY}',
-            '--build-arg', f'TARGET_ROBOT={robot}',
+            '--build-arg', f'TARGET_ROBOT={robot_script_name}',
             '-t', tag,
             target_dir
         ], check=True)

@@ -12,7 +12,6 @@ if output_dir.exists():
         else:
             entry.unlink()
 
-
 import argparse
 from build.builder import Builder
 from core.fuzzer import Fuzzer
@@ -22,25 +21,29 @@ class Interface:
     def __init__(self):
         parser = argparse.ArgumentParser(description="Python-based ROS2 RTPS Fuzzer")
         parser.add_argument("version", help="ROS2 version (e.g., humble, jazzy)")
-        parser.add_argument("robot",   help="Robot target (e.g., turtlebot3, px4)")
-        parser.add_argument("topic",   help="ROS2 topic name (e.g., cmd_vel)")
-        
+        parser.add_argument("robot", help="Robot target (e.g., turtlebot3, px4)")
+        parser.add_argument("topic", help="ROS2 topic name (e.g., cmd_vel)")
+        parser.add_argument("--headless", action="store_true",
+                            help="Run in headless mode (no GUI)")
+
         args = parser.parse_args()
         self.version = args.version
-        self.robot   = args.robot
-        self.topic   = args.topic
+        self.robot = args.robot
+        self.topic = args.topic
+        self.headless = args.headless
 
         info(f"Starting fuzzer with version='{self.version}', "
-             f"robot='{self.robot}', topic='{self.topic}'")
+             f"robot='{self.robot}', topic='{self.topic}', headless={self.headless}")
 
 if __name__ == "__main__":
     interface = Interface()
     builder = Builder()
-    builder.build_docker(interface.version, interface.robot)
+    builder.build_docker(interface.version, interface.robot, headless=interface.headless)
 
     fuzzer = Fuzzer(
-        version    = interface.version,
-        robot      = interface.robot,
-        topic_name = interface.topic
+        version=interface.version,
+        robot=interface.robot,
+        topic_name=interface.topic,
+        headless=interface.headless
     )
     fuzzer.run()

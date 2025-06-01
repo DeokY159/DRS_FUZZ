@@ -1,5 +1,6 @@
 import json
 import subprocess
+import os
 
 def parse_topic_info(raw_output: str) -> tuple[dict, dict]:
     """
@@ -32,10 +33,12 @@ def parse_topic_info(raw_output: str) -> tuple[dict, dict]:
                 entry["history"] = line.split(":", 1)[1].strip()
             elif line.strip().startswith("Durability:"):
                 entry["durability"] = line.split(":", 1)[1].strip()
-        et = entry.get("endpoint_type", "")
-        if et == "PUBLISHER":
+
+        n_name = entry.get("node_name", "") 
+        e_type = entry.get("endpoint_type", "")
+        if e_type == "PUBLISHER" and not n_name.startswith("_"):
             publisher = entry
-        elif et in ("SUBSCRIPTION", "SUBSCRIBER"):
+        elif e_type in "SUBSCRIPTION" and not n_name.startswith("_"):
             subscriber = entry
     return publisher, subscriber
 

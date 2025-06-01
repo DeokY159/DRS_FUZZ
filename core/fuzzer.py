@@ -6,6 +6,7 @@ import sys
 import time
 import datetime
 import shutil
+import subprocess
 
 import rclpy
 from rclpy.node import Node
@@ -120,19 +121,23 @@ class FuzzPublisher(Node):
         # prepare mutation strategy and payloads
         self.rtps.build_base_packet(rmw_impl=rmw_impl, inspect_info=inspect_info)
 
-        ### TODO: 각 rmw_implementation에는 동일한 패킷이 전송되야 함. 이렇게하면 해당 인스턴스마다 다른 패킷들이 전송되어버림 ###
-        # NOW FIXED: mutated_payloads are passed from outside, so all RMW implementations use the same packets
-        ##############################################################
-
         # timer triggers send loop
         self.timer = self.create_timer(MESSAGE_PERIOD, self._timer_callback)
+        
 
     def _timer_callback(self) -> None:
         if self.seq_num > MESSAGES_PER_RUN:
+            cmd = ['ros2','topic','echo','/odom','--once']
+            # TODO: oracle develop
+            with open('odom_test.txt', 'w') as out:
+                test_pid = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
+            time.sleep(2)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
             self.future.set_result(True)
+            # TODO: oracle develop
+            test_pid.kill()
             return
 
         # Use the pre-generated mutated payload
@@ -174,7 +179,7 @@ class Fuzzer:
         "cmd_vel": {"1": 7665, "2": 7915, "3": 8165}
     }
 
-    def __init__(self, version: str, robot: str, topic_name: str) -> None:
+    def __init__(self, version, robot, topic_name, headless=False) -> None:
         self.version    = version
         self.robot      = robot
         self.topic_name = topic_name
@@ -273,6 +278,8 @@ class Fuzzer:
         info(msg)
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
+        
+
 
         node = None
         try:
@@ -292,10 +299,12 @@ class Fuzzer:
         except Exception as e:
             error(f"FuzzPublisher error: {e}")
         finally:
+            
             if node:
                 node.destroy_node()
             if rclpy.ok():
                 rclpy.shutdown()
+            
 
     def run(self) -> None:
         # 1) start containers and Gazebo
@@ -342,6 +351,8 @@ class Fuzzer:
                         fp.write(payload)
 
                 for rmw_impl in self.DST_IP_MAP.keys():
+                    
+
                     self.gen_packet_sender(rmw_impl, self.rtps.mutated_payloads)
                     self._detect_and_handle()
                     time.sleep(RUN_DELAY)
