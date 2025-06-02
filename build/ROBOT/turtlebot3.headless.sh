@@ -14,7 +14,7 @@ git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
 git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3.git
 
 # for headless mode
-file_path = "~/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world.launch.py"
+file_path="$HOME/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world.launch.py"
 sed -i '/ld\.add_action(gzclient_cmd)/s/^/# /' "$file_path"
 
 source /opt/ros/${ROS_DISTRO}/setup.sh
@@ -25,5 +25,3 @@ echo "export TURTLEBOT3_MODEL=burger"             | sudo tee -a /etc/bash.bashrc
 echo "source ~/turtlebot3_ws/install/setup.bash"  | sudo tee -a /etc/bash.bashrc
 echo "source /usr/share/gazebo/setup.sh"       | sudo tee -a /etc/bash.bashrc
 echo "source /usr/share/gazebo-11/setup.sh"       | sudo tee -a /etc/bash.bashrc
-
-

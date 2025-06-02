@@ -149,7 +149,7 @@ class RTPSPacket:
         self.topic_name = topic_name
         self.bound      = bound
         self.seed_dir   = seed_dir or os.path.join("./seed_payload", topic_name)
-        self._initialize_packet_mutation_strategies()   
+        self._initialize_packet_mutation_strategies() 
         self._select_input_seed()
         
         self.mutated_payloads: list[bytes] = []
@@ -279,6 +279,14 @@ class RTPSPacket:
             self.packet_mutation_strategy(arr, self.bound)
             self.mutated_payloads.append(bytes(arr))
 
+        """
+        For reproducing
+        """
+        #for i in range(1, mutation_cnt+1):
+        #    self.packet_mutation_strategy(arr, self.bound)
+        #    with open(f"./output/crash/20250603_004314/packets/mutated_{i}.bin", 'rb') as f:
+        #        bin = f.read()
+        #    self.mutated_payloads.append(bytes(bytearray(bin)))
 
     def build_base_packet(self, rmw_impl: str, inspect_info: str) -> None:
         """
