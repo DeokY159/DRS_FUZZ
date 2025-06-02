@@ -1,5 +1,6 @@
 # core/fuzzer.py
 
+import asyncio
 import os
 import socket
 import sys
@@ -18,18 +19,18 @@ from scapy.all import sendp, Ether, IP, UDP
 from scapy.contrib.rtps import RTPSMessage
 
 import core.inspector as inspector
-from core.executor import FuzzContainer
+from core.executor import FuzzContainer, RobotStateMonitor
 from core.mutator import RTPSPacket, DDSConfig
 from core.ui import info, error, debug
 
 # --- Constants ---
-RETRY_MAX_ATTEMPTS = 10      # retry attempts for transient failures
-RETRY_DELAY        = 1.0    # seconds between retries
+RETRY_MAX_ATTEMPTS = 20      # retry attempts for transient failures
+RETRY_DELAY        = 3.0    # seconds between retries
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
 MESSAGE_PERIOD     = 0.1    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 2.0    # seconds between different RMW runs
+RUN_DELAY          = 3.0    # seconds between different RMW runs
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
@@ -44,7 +45,6 @@ os.makedirs(CRASH_DIR, exist_ok=True)
 # initialize state log (clear or create)
 with open(STATE_LOG, 'w') as f:
     f.write(f"{datetime.datetime.now().isoformat()} - Fuzzing state log created\n")
-
 
 def get_host_internal_ip() -> str:
     """Get host IP by opening a UDP socket to the internet."""
@@ -83,7 +83,7 @@ class FuzzPublisher(Node):
     def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket,
                  rmw_impl: str, qos: QoSProfile, src_ip: str,
                  dst_ip: str, dport: int, container: FuzzContainer,
-                 mutated_payloads: list[bytes]) -> None:
+                 mutated_payloads: list[bytes], state_monitor: RobotStateMonitor) -> None:
         super().__init__('fuzzer_publisher')
         self.robot     = robot
         self.rtps      = rtps
@@ -97,6 +97,7 @@ class FuzzPublisher(Node):
         self.future    = Future()
         self.qos       = qos
         self.mutated_payloads = mutated_payloads  # Use the passed mutated payloads
+        self.state_monitor = state_monitor
 
         if topic_name == 'cmd_vel':
             self.publisher = self.create_publisher(Twist, topic_name, qos)
@@ -127,17 +128,13 @@ class FuzzPublisher(Node):
 
     def _timer_callback(self) -> None:
         if self.seq_num > MESSAGES_PER_RUN:
-            cmd = ['ros2','topic','echo','/odom','--once']
             # TODO: oracle develop
-            with open('odom_test.txt', 'w') as out:
-                test_pid = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
+            self.state_monitor.record_robot_states(self.rmw_impl)
             time.sleep(2)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
             self.future.set_result(True)
-            # TODO: oracle develop
-            test_pid.kill()
             return
 
         # Use the pre-generated mutated payload
@@ -190,10 +187,11 @@ class Fuzzer:
         self.stage       = 0
         self.round       = 0
 
-        self.src_ip     = get_host_internal_ip()
-        self.rtps       = RTPSPacket(self.topic_name)
-        self.dds_config = DDSConfig()
-        self.container  = FuzzContainer(self.version, self.robot, self.DST_IP_MAP)
+        self.src_ip        = get_host_internal_ip()
+        self.rtps          = RTPSPacket(self.topic_name)
+        self.dds_config    = DDSConfig()
+        self.container     = FuzzContainer(self.version, self.robot, self.DST_IP_MAP)
+        self.state_monitor = RobotStateMonitor(self.robot)
 
         # log initial state to state log
         msg = f"Initial state: version={self.version}, robot={self.robot}, topic={self.topic_name}"
@@ -259,8 +257,8 @@ class Fuzzer:
 
     def _detect_and_handle(self) -> None:
         """Check ASAN in container logs and handle crash."""
-        for dds_name in self.DST_IP_MAP:
-            cname    = f"{self.version}_{self.robot}_{dds_name}"
+        for rmw_impl in self.DST_IP_MAP:
+            cname    = f"{self.version}_{self.robot}_{rmw_impl}"
             log_path = os.path.join(LOGS_DIR, f"{cname}.log")
             if self._check_asan(log_path):
                 error(f"ASAN detected in container {cname}")
@@ -278,8 +276,6 @@ class Fuzzer:
         info(msg)
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
-        
-
 
         node = None
         try:
@@ -293,7 +289,8 @@ class Fuzzer:
                 dst_ip     = self.DST_IP_MAP[rmw_impl],
                 dport      = self.DST_PORT_MAP[self.topic_name][self.DOMAIN_ID_MAP[rmw_impl]],
                 container  = self.container,
-                mutated_payloads = mutated_payloads  # Pass the mutated payloads
+                mutated_payloads = mutated_payloads,  # Pass the mutated payloads
+                state_monitor = self.state_monitor
             )
             rclpy.spin_until_future_complete(node, node.future)
         except Exception as e:

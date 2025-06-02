@@ -1,4 +1,5 @@
 # core/executor.py
+import asyncio
 import subprocess
 import os
 import sys
@@ -8,8 +9,8 @@ from subprocess import Popen, PIPE
 from ament_index_python.packages import get_package_share_directory
 from core.ui import info, error, warn, done, debug
 
-RETRY_MAX_ATTEMPTS = 5
-TIME_DELAY        = 1.0
+RETRY_MAX_ATTEMPTS = 10
+TIME_DELAY        = 5.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -38,7 +39,7 @@ class FuzzContainer:
             error(f"Failed to exec in '{container}': {e}")
             raise
 
-    def _wait_for_log(self, container: str, pattern: str, timeout: float = 30.0) -> None:
+    def _wait_for_log(self, container: str, pattern: str, timeout: float = 90.0) -> None:
         debug(f"Waiting for log pattern '{pattern}' in '{container}'")
         proc = Popen(['docker', 'logs', '-f', container], stdout=PIPE, stderr=PIPE, text=True)
         start = time.time()
@@ -76,14 +77,14 @@ class FuzzContainer:
 
         # launch containers and capture logs
         domain_id = 1
-        for dds_name, dds_ip in self.dds_map.items():
-            cname = f"{self.version}_{self.robot}_{dds_name}"
+        for rmw_impl, dds_ip in self.dds_map.items():
+            cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Starting container '{cname}' on '{self.network_name}'")
             try:
                 subprocess.run([
                     'docker','run','--rm','-d','--privileged',
                     '-e', f"DISPLAY={os.environ.get('DISPLAY')}",
-                    '-e', f"RMW_IMPLEMENTATION={dds_name}",
+                    '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
                     '-e', f"ROS_DOMAIN_ID={domain_id}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
                     '--net', self.network_name, '--ip', dds_ip,
@@ -108,28 +109,28 @@ class FuzzContainer:
                 error(f"Failed to start '{cname}': {e}")
 
     def run_gazebo(self) -> None:
-        for dds_name in self.dds_map:
-            cname = f"{self.version}_{self.robot}_{dds_name}"
+        for rmw_impl in self.dds_map:
+            cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Launching Gazebo in '{cname}' (detached)...")
             subprocess.run([
                 'docker', 'exec', '-d', cname,
                 'bash', '-ic',
-                #'ros2 launch turtlebot3_gazebo empty_world.launch.py '
-                'ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py '
+                #'ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py '
+                'ros2 launch turtlebot3_gazebo turtlebot3_house.launch.py '
                 '> /proc/1/fd/1 2>/proc/1/fd/2 &'
             ], check=True)
             self._wait_for_log(cname, r'process has finished cleanly')
             time.sleep(TIME_DELAY)
             done(f"Gazebo is up in '{cname}'")
-            self.delete_robot(dds_name)
+            self.delete_robot(rmw_impl)
             time.sleep(TIME_DELAY)
 
-    def spawn_robot(self,dds_name) -> None:
+    def spawn_robot(self,rmw_impl) -> None:
         if self.robot not in self.ROBOT_MODELS:
             error(f"Unsupported robot: '{self.robot}'")
             sys.exit(1)
         
-        cname = f"{self.version}_{self.robot}_{dds_name}"
+        cname = f"{self.version}_{self.robot}_{rmw_impl}"
         info(f"Spawning robot in '{cname}' (detached)...")
         sdf = f"/root/turtlebot3_ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models/turtlebot3_{self.ROBOT_MODELS[self.robot]}/model.sdf"
         cmd = (
@@ -143,11 +144,11 @@ class FuzzContainer:
         time.sleep(TIME_DELAY)
         done(f"Robot spawned in '{cname}'")
 
-    def delete_robot(self,dds_name) -> None:
+    def delete_robot(self,rmw_impl) -> None:
         if self.robot not in self.ROBOT_MODELS:
             return
 
-        cname = f"{self.version}_{self.robot}_{dds_name}"
+        cname = f"{self.version}_{self.robot}_{rmw_impl}"
         info(f"Deleting robot in '{cname}' (detached)...")
         args = f"{{name: '{self.ROBOT_MODELS[self.robot]}'}}"
         cmd = (
@@ -168,10 +169,37 @@ class FuzzContainer:
         self.log_procs.clear()
 
         # stop containers
-        for dds_name in self.dds_map:
-            cname = f"{self.version}_{self.robot}_{dds_name}"
+        for rmw_impl in self.dds_map:
+            cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Stopping container '{cname}'")
             subprocess.run(['docker','stop', cname], check=False)
 
         info(f"Removing Docker network: {self.network_name}")
         subprocess.run(['docker','network','rm', self.network_name], check=False)
+
+class RobotStateMonitor:
+    WATCHLIST = {
+        "turtlebot3": ["imu", "odom", "scan"]
+    }
+
+    def __init__(self, robot) -> None:
+        self.robot = robot
+
+    def record_robot_states(self, rmw_impl) -> None:
+        targets = self.WATCHLIST[self.robot]
+
+        log_dir = f"./output/logs/robot_states/{self.robot}/{rmw_impl}"
+        os.makedirs(log_dir, exist_ok=True)
+
+        for target in targets:
+            cmd = ["ros2", "topic", "echo", target, "--once"]
+            try:
+                with open(f"{log_dir}/{target}.log", "w", encoding="utf-8") as out:
+                    pid = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
+                time.sleep(3)
+                pid.kill()
+
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Unable to call subprocess for topic '{target}': {e}")
+            except OSError as e:
+                raise RuntimeError(f"Unable to open file '{target}.log': {e}")
