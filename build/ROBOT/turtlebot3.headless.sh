@@ -14,8 +14,10 @@ git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
 git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3.git
 
 # for headless mode
-file_path="$HOME/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world.launch.py"
-sed -i '/ld\.add_action(gzclient_cmd)/s/^/# /' "$file_path"
+file_path="/root/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world.launch.py"
+headless_file_path="/root/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world_headless.launch.py"
+cp $src_file_path $dst_file_path
+sed -i '/ld\.add_action(gzclient_cmd)/s/^/# /' "$headless_file_path"
 
 source /opt/ros/${ROS_DISTRO}/setup.sh
 cd ~/turtlebot3_ws
