@@ -115,8 +115,7 @@ class FuzzContainer:
             subprocess.run([
                 'docker', 'exec', '-d', cname,
                 'bash', '-ic',
-                #'ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py '
-                'ros2 launch turtlebot3_gazebo turtlebot3_house.launch.py '
+                'ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py '
                 '> /proc/1/fd/1 2>/proc/1/fd/2 &'
             ], check=True)
             self._wait_for_log(cname, r'process has finished cleanly')
@@ -193,13 +192,22 @@ class RobotStateMonitor:
 
         for target in targets:
             cmd = ["ros2", "topic", "echo", target, "--once"]
+            log_path = f"{log_dir}/{target}.log"
             try:
-                with open(f"{log_dir}/{target}.log", "w", encoding="utf-8") as out:
+                with open(log_path, "w", encoding="utf-8") as out:
                     pid = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
-                time.sleep(3)
-                pid.kill()
+                    try:
+                        pid.wait(timeout=30)
+                        
+                    except subprocess.TimeoutExpired as e:
+                        pid.kill()
+                        pid.wait()
+                        raise RuntimeError(f"Subprocess for topic '{target}' didn't finish in time: {e}")
 
-            except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Unable to call subprocess for topic '{target}': {e}")
+                if pid.returncode != 0:
+                    raise RuntimeError(f"Subprocess for topic '{target}' failed with code {pid.returncode}")
+
+                info(f"Robot State(/{target}) log has saved to '{log_path}'")
+
             except OSError as e:
-                raise RuntimeError(f"Unable to open file '{target}.log': {e}")
+                raise RuntimeError(f"Unable to open or write to '{log_path}': {e}")
