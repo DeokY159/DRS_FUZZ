@@ -1,5 +1,4 @@
 # core/executor.py
-import asyncio
 import subprocess
 import os
 import sys
@@ -9,8 +8,8 @@ from subprocess import Popen, PIPE
 from ament_index_python.packages import get_package_share_directory
 from core.ui import info, error, warn, done, debug
 
-RETRY_MAX_ATTEMPTS = 10
-TIME_DELAY        = 5.0
+RETRY_MAX_ATTEMPTS = 5
+TIME_DELAY        = 1.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -21,14 +20,17 @@ class FuzzContainer:
     """
     ROBOT_MODELS = {"turtlebot3": "burger"}
 
-    def __init__(self, version: str, robot: str, dds_map: dict) -> None:
+    def __init__(self, version: str, robot: str, dds_map: dict, headless: bool = False, asan: bool = False) -> None:
         self.version      = version
         self.robot        = robot
         self.dds_map      = dds_map
+        self.headless     = headless
         self.network_name = "drs_fuzz"
         self.network_iface= "none"
         self.subnet       = "192.168.10.0/24"
-        self.image_tag    = f"fuzzer_{version}_{robot}"
+        parts = [f"fuzzer_{version}_{robot}"]
+        if asan:     parts.append("asan")
+        self.image_tag = "_".join(parts)
         self.log_procs: list[tuple[Popen, any]] = []
 
     def _docker_exec(self, container: str, cmd: list) -> None:
@@ -39,7 +41,7 @@ class FuzzContainer:
             error(f"Failed to exec in '{container}': {e}")
             raise
 
-    def _wait_for_log(self, container: str, pattern: str, timeout: float = 90.0) -> None:
+    def _wait_for_log(self, container: str, pattern: str, timeout: float = 30.0) -> None:
         debug(f"Waiting for log pattern '{pattern}' in '{container}'")
         proc = Popen(['docker', 'logs', '-f', container], stdout=PIPE, stderr=PIPE, text=True)
         start = time.time()
@@ -62,7 +64,7 @@ class FuzzContainer:
         os.makedirs(logs_dir, exist_ok=True)
 
         # create network
-        existing = subprocess.run(
+        subprocess.run(
             ['docker','network','ls','--filter',f'name=^{self.network_name}$','--format','{{.Name}}'],
             capture_output=True, text=True
         ).stdout.splitlines()
@@ -97,9 +99,9 @@ class FuzzContainer:
 
                 # capture logs to output/logs/{container}.log
                 log_path = os.path.join(logs_dir, f"{cname}.log")
-                with open(log_path,'w'): # initial data
+                with open(log_path,'w'):
                     pass
-                log_file = open(log_path, 'a')  # append mode
+                log_file = open(log_path, 'a')
                 proc = Popen(['docker', 'logs', '-f', cname], stdout=log_file, stderr=log_file, text=True)
                 self.log_procs.append((proc, log_file))
 

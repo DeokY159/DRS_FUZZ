@@ -1,6 +1,8 @@
 ARG ROS_DISTRO=humble
 FROM ubuntu:22.04
+
 ARG TARGET_ROBOT
+ARG ASAN_ENABLED=false
 
 ENV DEBIAN_FRONTEND=noninteractive \
     ROS_DISTRO=humble \
@@ -34,16 +36,31 @@ RUN mkdir -p ~/ros2_humble/src \
  && rosdep install --from-paths src --ignore-src -y --skip-keys "fastcdr rti-connext-dds-6.0.1 urdfdom_headers" -y
 
 RUN cd ~/ros2_humble \
- && MAKEFLAGS="-j1 -l1" colcon build --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address
+ && if [ "$ASAN_ENABLED" = "true" ]; then \
+      # Debug+ASAN
+      MAKEFLAGS="-j1 -l1" \
+      colcon build --executor sequential \
+                   --cmake-args \
+                     -DCMAKE_BUILD_TYPE=Debug \
+                     -DCMAKE_C_FLAGS=-fsanitize=address \
+                     -DCMAKE_CXX_FLAGS=-fsanitize=address; \
+    else \
+      # Release
+      MAKEFLAGS="-j1 -l1" \
+      colcon build; \
+    fi
+
 RUN rm -rf /var/lib/apt/lists/* && apt-get clean && apt-get update
 
-# Copy and run the robot-specific installation script
-COPY ${TARGET_ROBOT} /root/${TARGET_ROBOT}
-RUN chmod +x /root/${TARGET_ROBOT} \
- && bash -c "source ~/ros2_humble/install/setup.bash && /root/${TARGET_ROBOT}"
+COPY ${TARGET_ROBOT}.sh /root/${TARGET_ROBOT}.sh
+RUN chmod +x /root/${TARGET_ROBOT}.sh \
+ && bash -c "source ~/ros2_humble/install/setup.bash && /root/${TARGET_ROBOT}.sh"
 
-ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"
-ENV ASAN_OPTIONS="detect_leaks=0:new_delete_type_mismatch=0:handle_segv=0:abort_on_error=0:symbolize=1"
+RUN if [ "$ASAN_ENABLED" = "true" ]; then \
+      echo 'export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6"' >> /etc/bash.bashrc && \
+      echo 'export ASAN_OPTIONS="detect_leaks=0:new_delete_type_mismatch=0:handle_segv=0:abort_on_error=0:symbolize=1"' >> /etc/bash.bashrc; \
+    fi
+
 RUN echo "source ~/ros2_humble/install/setup.bash" >> /etc/bash.bashrc
 
 ENTRYPOINT ["/bin/bash"]

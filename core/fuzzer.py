@@ -1,6 +1,5 @@
 # core/fuzzer.py
 
-import asyncio
 import os
 import socket
 import sys
@@ -25,12 +24,12 @@ from core.ui import info, error, debug
 
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 20      # retry attempts for transient failures
-RETRY_DELAY        = 3.0    # seconds between retries
+RETRY_DELAY        = 2.0    # seconds between retries
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
 MESSAGE_PERIOD     = 0.1    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 3.0    # seconds between different RMW runs
+RUN_DELAY          = 2.0    # seconds between different RMW runs
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
@@ -96,7 +95,7 @@ class FuzzPublisher(Node):
         self.seq_num   = 1
         self.future    = Future()
         self.qos       = qos
-        self.mutated_payloads = mutated_payloads  # Use the passed mutated payloads
+        self.mutated_payloads = mutated_payloads
         self.state_monitor = state_monitor
 
         if topic_name == 'cmd_vel':
@@ -128,7 +127,6 @@ class FuzzPublisher(Node):
 
     def _timer_callback(self) -> None:
         if self.seq_num > MESSAGES_PER_RUN:
-            # TODO: oracle develop
             self.state_monitor.record_robot_states(self.rmw_impl)
             time.sleep(2)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
@@ -176,10 +174,12 @@ class Fuzzer:
         "cmd_vel": {"1": 7665, "2": 7915, "3": 8165}
     }
 
-    def __init__(self, version, robot, topic_name, headless=False) -> None:
+    def __init__(self, version, robot, topic_name, headless=False, asan=False) -> None:
         self.version    = version
         self.robot      = robot
         self.topic_name = topic_name
+        self.headless   = headless
+        self.asan   = asan
 
         # initialize state counters
         self.crash_count = 0
@@ -231,16 +231,14 @@ class Fuzzer:
             fp.write(f"  depth: {qos.depth}\n")
             fp.write(f"  liveliness: {qos.liveliness.name}\n")
 
-        # log crash event to state log
+        # log crash and state data
         msg = f"Crash #{self.crash_count} detected; data & logs saved to {crash_base}"
         info(msg)
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
 
-        # save state log snapshot after writing crash entry
         shutil.copy(STATE_LOG, os.path.join(crash_base, 'state.log'))
 
-        # save all container logs and clear them (skip state log)
         for fname in os.listdir(LOGS_DIR):
             src = os.path.join(LOGS_DIR, fname)
             if fname == os.path.basename(STATE_LOG):
@@ -289,7 +287,7 @@ class Fuzzer:
                 dst_ip     = self.DST_IP_MAP[rmw_impl],
                 dport      = self.DST_PORT_MAP[self.topic_name][self.DOMAIN_ID_MAP[rmw_impl]],
                 container  = self.container,
-                mutated_payloads = mutated_payloads,  # Pass the mutated payloads
+                mutated_payloads = mutated_payloads,
                 state_monitor = self.state_monitor
             )
             rclpy.spin_until_future_complete(node, node.future)
@@ -348,8 +346,6 @@ class Fuzzer:
                         fp.write(payload)
 
                 for rmw_impl in self.DST_IP_MAP.keys():
-                    
-
                     self.gen_packet_sender(rmw_impl, self.rtps.mutated_payloads)
                     self._detect_and_handle()
                     time.sleep(RUN_DELAY)
