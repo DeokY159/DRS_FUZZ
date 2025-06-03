@@ -190,7 +190,7 @@ class Fuzzer:
         self.src_ip        = get_host_internal_ip()
         self.rtps          = RTPSPacket(self.topic_name)
         self.dds_config    = DDSConfig()
-        self.container     = FuzzContainer(self.version, self.robot, self.DST_IP_MAP)
+        self.container     = FuzzContainer(self.version, self.robot, self.DST_IP_MAP, self.headless, self.asan)
         self.state_monitor = RobotStateMonitor(self.robot)
 
         # log initial state to state log

@@ -111,19 +111,18 @@ class FuzzContainer:
                 error(f"Failed to start '{cname}': {e}")
 
     def run_gazebo(self) -> None:
-        for rmw_impl in self.dds_map:
-            cname = f"{self.version}_{self.robot}_{rmw_impl}"
-            info(f"Launching Gazebo in '{cname}' (detached)...")
+        launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py"
+        for dds_name in self.dds_map:
+            cname = f"{self.version}_{self.robot}_{dds_name}"
+            info(f"Launching Gazebo in '{cname}'")
             subprocess.run([
-                'docker', 'exec', '-d', cname,
-                'bash', '-ic',
-                'ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py '
-                '> /proc/1/fd/1 2>/proc/1/fd/2 &'
+                'docker','exec','-d',cname,'bash','-ic',
+                f'ros2 launch turtlebot3_gazebo {launch} > /proc/1/fd/1 2>/proc/1/fd/2 &'
             ], check=True)
             self._wait_for_log(cname, r'process has finished cleanly')
             time.sleep(TIME_DELAY)
-            done(f"Gazebo is up in '{cname}'")
-            self.delete_robot(rmw_impl)
+            done(f"Gazebo up in '{cname}'")
+            self.delete_robot(dds_name)
             time.sleep(TIME_DELAY)
 
     def spawn_robot(self,rmw_impl) -> None:

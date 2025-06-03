@@ -15,7 +15,7 @@ if output_dir.exists():
 import argparse
 from build.builder import Builder
 from core.fuzzer import Fuzzer
-from core.ui import info, warn, error
+from core.ui import info, banner
 
 class Interface:
     def __init__(self):
@@ -37,6 +37,7 @@ class Interface:
              f"robot='{self.robot}', topic='{self.topic}', headless={self.headless}, asan={self.asan}")
 
 if __name__ == "__main__":
+    banner()
     interface = Interface()
     builder = Builder()
     builder.build_docker(interface.version, interface.robot,
@@ -46,6 +47,7 @@ if __name__ == "__main__":
         version=interface.version,
         robot=interface.robot,
         topic_name=interface.topic,
-        headless=interface.headless
+        headless=interface.headless,
+        asan=interface.asan
     )
     fuzzer.run()
