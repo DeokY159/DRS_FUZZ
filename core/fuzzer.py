@@ -24,12 +24,12 @@ from core.ui import info, error, debug
 
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 20      # retry attempts for transient failures
-RETRY_DELAY        = 2.0    # seconds between retries
+RETRY_DELAY        = 3.0    # seconds between retries
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
-MESSAGES_PER_RUN   = 10     # messages per spin run
+MESSAGES_PER_RUN   = 1     # messages per spin run
 MESSAGE_PERIOD     = 0.1    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 2.0    # seconds between different RMW runs
+RUN_DELAY          = 3.0    # seconds between different RMW runs
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
