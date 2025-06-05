@@ -19,7 +19,7 @@ from std_msgs.msg import Header
 from subprocess import Popen, PIPE
 
 RETRY_MAX_ATTEMPTS = 10
-TIME_DELAY        = 5.0
+TIME_DELAY        = 2.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -72,22 +72,25 @@ class FuzzContainer:
         logs_dir = os.path.join(os.getcwd(), 'output', 'logs')
         os.makedirs(logs_dir, exist_ok=True)
 
-        # create network
-        subprocess.run(
-            ['docker','network','ls','--filter',f'name=^{self.network_name}$','--format','{{.Name}}'],
+        # docker network
+        result = subprocess.run(
+            ['docker', 'network', 'inspect', self.network_name, '--format', '{{.Id}}'],
             capture_output=True, text=True
-        ).stdout.splitlines()
-        info(f"Creating Docker network: {self.network_name}")
-        try:
-            result = subprocess.run([
-                'docker','network','create',
-                '--driver','bridge', f'--subnet={self.subnet}', self.network_name
-            ], capture_output=True, text=True, check=True)          
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
             network_id = result.stdout.strip()
-            self.network_iface = f"br-{network_id[:12]}"
-            done(f"Created network {self.network_name} (ID={network_id}, iface={self.network_iface})")
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to create Docker network '{self.network_name}': {e}")
+            done(f"Docker network '{self.network_name}' already exists.")
+        else:
+            result = subprocess.run([
+                'docker', 'network', 'create',
+                '--driver', 'bridge', f'--subnet={self.subnet}', self.network_name
+            ], capture_output=True, text=True, check=True)
+            network_id = result.stdout.strip()
+            done(f"Created docker network '{self.network_name}'.")
+
+        self.network_iface = f"br-{network_id[:12]}"
+        debug(f"Docker network 'name:{self.network_name}','id:{self.network_iface}'")
 
         # launch containers and capture logs
         domain_id = 1
@@ -123,7 +126,8 @@ class FuzzContainer:
                 error(f"Failed to start '{cname}': {e}")
 
     def run_gazebo(self) -> None:
-        launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py"
+        #launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py"
+        launch = "turtlebot3_world.headless.launch.py" if self.headless else "empty_world.launch.py"
         for dds_name in self.dds_map:
             cname = f"{self.version}_{self.robot}_{dds_name}"
             info(f"Launching Gazebo in '{cname}'")
@@ -148,7 +152,7 @@ class FuzzContainer:
         cmd = (
             "ros2 run gazebo_ros spawn_entity.py "
             f"-entity {self.ROBOT_MODELS[self.robot]} "
-            f"-file {sdf} -x 0.0 -y 0.0 -z 0.01 "
+            f"-file {sdf} -x 0.5 -y 0.5 -z 0.01 "
             "> /proc/1/fd/1 2>/proc/1/fd/2 &"
         )
         subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
@@ -186,8 +190,8 @@ class FuzzContainer:
             info(f"Stopping container '{cname}'")
             subprocess.run(['docker','stop', cname], check=False)
 
-        info(f"Removing Docker network: {self.network_name}")
-        subprocess.run(['docker','network','rm', self.network_name], check=False)
+        #info(f"Removing Docker network: {self.network_name}")
+        #subprocess.run(['docker','network','rm', self.network_name], check=False)
 
 class RobotStateMonitor:
     WATCHLIST = {

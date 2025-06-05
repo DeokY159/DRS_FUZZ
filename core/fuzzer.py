@@ -24,12 +24,12 @@ from core.ui import info, error, debug
 
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 20      # retry attempts for transient failures
-RETRY_DELAY        = 3.0    # seconds between retries
+RETRY_DELAY        = 2.0    # seconds between retries
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
-MESSAGES_PER_RUN   = 1     # messages per spin run
-MESSAGE_PERIOD     = 0.1    # seconds between packets
+MESSAGES_PER_RUN   = 10     # messages per spin run
+MESSAGE_PERIOD     = 0.2    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 3.0    # seconds between different RMW runs
+RUN_DELAY          = 2.0    # seconds between different RMW runs
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
@@ -110,6 +110,7 @@ class FuzzPublisher(Node):
         for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
             try:
                 inspect_info = inspector.get_topic_info(f'/{topic_name}')
+                time.sleep(3)
                 break
             except Exception as e:
                 if attempt == RETRY_MAX_ATTEMPTS:
@@ -127,8 +128,8 @@ class FuzzPublisher(Node):
 
     def _timer_callback(self) -> None:
         if self.seq_num > MESSAGES_PER_RUN:
-            self.state_monitor.record_robot_states(self.rmw_impl)
-            time.sleep(2)
+            #self.state_monitor.record_robot_states(self.rmw_impl)
+            #time.sleep(RETRY_DELAY)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
