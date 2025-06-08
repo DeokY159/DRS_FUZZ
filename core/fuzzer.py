@@ -1,5 +1,4 @@
 # core/fuzzer.py
-
 import os
 import socket
 import sys
@@ -23,13 +22,13 @@ from core.mutator import RTPSPacket, DDSConfig
 from core.ui import info, error, debug
 
 # --- Constants ---
-RETRY_MAX_ATTEMPTS = 20      # retry attempts for transient failures
-RETRY_DELAY        = 2.0    # seconds between retries
+RETRY_MAX_ATTEMPTS = 10     # retry attempts for transient failures
+RETRY_DELAY        = 1.0    # seconds between retries
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
 MESSAGE_PERIOD     = 0.2    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 2.0    # seconds between different RMW runs
+RUN_DELAY          = 1.0    # seconds between different RMW runs
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
@@ -45,23 +44,6 @@ os.makedirs(CRASH_DIR, exist_ok=True)
 with open(STATE_LOG, 'w') as f:
     f.write(f"{datetime.datetime.now().isoformat()} - Fuzzing state log created\n")
 
-def get_host_internal_ip() -> str:
-    """Get host IP by opening a UDP socket to the internet."""
-    for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except OSError as e:
-            if attempt == RETRY_MAX_ATTEMPTS:
-                error(f"Failed to determine host internal IP: {e}")
-                sys.exit(1)
-            info(f"Retrying IP lookup (attempt {attempt})")
-            time.sleep(RETRY_DELAY)
-
-
 def send_packet(src_ip: str, dst_ip: str, dport: int, iface: str, rtps: RTPSPacket) -> None:
     """Construct and send one RTPS packet via scapy."""
     pkt = (
@@ -74,20 +56,21 @@ def send_packet(src_ip: str, dst_ip: str, dport: int, iface: str, rtps: RTPSPack
     sendp(pkt, iface=iface, verbose=False)
     info(f"Packet sent to {dst_ip}:{dport} (seq={rtps.data.writerSeqNumLow})")
 
-
 class FuzzPublisher(Node):
     """
     ROS2 Node that sends a burst of mutated RTPS packets.
     """
     def __init__(self, robot: str, topic_name: str, rtps: RTPSPacket,
-                 rmw_impl: str, qos: QoSProfile, src_ip: str,
+                 rmw_impl: str, dds_id: str, qos: QoSProfile, src_ip: str,
                  dst_ip: str, dport: int, container: FuzzContainer,
                  mutated_payloads: list[bytes], state_monitor: RobotStateMonitor) -> None:
         super().__init__('fuzzer_publisher')
         self.robot     = robot
+        self.topic_name= topic_name
         self.rtps      = rtps
         self.rmw_impl  = rmw_impl
         self.src_ip    = src_ip
+        self.dds_id    = dds_id
         self.dst_ip    = dst_ip
         self.dport     = dport
         self.iface     = container.network_iface
@@ -98,30 +81,37 @@ class FuzzPublisher(Node):
         self.mutated_payloads = mutated_payloads
         self.state_monitor = state_monitor
 
-        if topic_name == 'cmd_vel':
-            self.publisher = self.create_publisher(Twist, topic_name, qos)
-        else:
-            error(f"Unsupported topic '{topic_name}'")
-            sys.exit(1)
-
         container.spawn_robot(self.rmw_impl)
 
-        # fetch topic info for base packet
+        # fetch topic info for base packet     
+        inspector.create_publisher(
+                topic_name=f'/{topic_name}',
+                container=container.inspector_name,
+                rmw_impl=self.rmw_impl,
+                domain_id=self.dds_id,
+                qos_profile=qos
+            )
+        
         for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
             try:
-                inspect_info = inspector.get_topic_info(f'/{topic_name}')
-                time.sleep(3)
+                info_json = inspector.get_topic_info(
+                    f'/{topic_name}',
+                    container=container.inspector_name,
+                    rmw_impl=self.rmw_impl,
+                    domain_id=self.dds_id,
+                    indent=2
+                )
+                time.sleep(10)
                 break
             except Exception as e:
                 if attempt == RETRY_MAX_ATTEMPTS:
                     error(f"Unable to get topic info: {e}")
-                    sys.exit(1)
-                info("Retrying get_topic_info()")
+                    raise
+                info(f"Retrying topic info (attempt {attempt})")
                 time.sleep(RETRY_DELAY)
-
+        
         # prepare mutation strategy and payloads
-        self.rtps.build_base_packet(rmw_impl=rmw_impl, inspect_info=inspect_info)
-
+        self.rtps.build_base_packet(rmw_impl=self.rmw_impl, inspect_info=info_json)
         # timer triggers send loop
         self.timer = self.create_timer(MESSAGE_PERIOD, self._timer_callback)
         
@@ -134,13 +124,14 @@ class FuzzPublisher(Node):
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
             self.future.set_result(True)
+            inspector.stop_publisher(topic_name=f'/{self.topic_name}',container=self.container.inspector_name)
             return
 
         # Use the pre-generated mutated payload
         self.rtps.ts = self.rtps._build_info_ts()
         self.rtps.data.data.serializedData = self.mutated_payloads[self.seq_num - 1]
         self.rtps.data.writerSeqNumLow = self.seq_num
-        
+
         send_packet(
             src_ip=self.src_ip,
             dst_ip=self.dst_ip,
@@ -161,6 +152,7 @@ class Fuzzer:
       5) restart containers on crash
       6) cleanup
     """
+    INSPECTOR_IP = "192.168.10.100"
     DST_IP_MAP = {
         "rmw_fastrtps_cpp":   "192.168.10.10",
         "rmw_cyclonedds_cpp": "192.168.10.20",
@@ -187,11 +179,11 @@ class Fuzzer:
         self.run_count   = 0
         self.stage       = 0
         self.round       = 0
-
-        self.src_ip        = get_host_internal_ip()
+        
+        self.src_ip        = self.INSPECTOR_IP
         self.rtps          = RTPSPacket(self.topic_name)
         self.dds_config    = DDSConfig()
-        self.container     = FuzzContainer(self.version, self.robot, self.DST_IP_MAP, self.headless, self.asan)
+        self.container     = FuzzContainer(self.version, self.robot, self.DST_IP_MAP, self.DOMAIN_ID_MAP, self.src_ip, self.headless, self.asan)
         self.state_monitor = RobotStateMonitor(self.robot)
 
         # log initial state to state log
@@ -283,6 +275,7 @@ class Fuzzer:
                 topic_name = self.topic_name,
                 rtps       = self.rtps,
                 rmw_impl   = rmw_impl,
+                dds_id     = self.DOMAIN_ID_MAP[rmw_impl],
                 qos        = self.dds_config.get_qos(),
                 src_ip     = self.src_ip,
                 dst_ip     = self.DST_IP_MAP[rmw_impl],
@@ -311,7 +304,8 @@ class Fuzzer:
         except Exception as e:
             error(f"Container/Gazebo setup failed: {e}")
             self.container.close_docker()
-            sys.exit(1)
+            exit(1)
+
 
         # 2) main fuzz loop
         info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")

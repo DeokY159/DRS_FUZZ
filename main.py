@@ -42,12 +42,12 @@ if __name__ == "__main__":
     builder = Builder()
     builder.build_docker(interface.version, interface.robot,
                          headless=interface.headless, asan=interface.asan)
-
-    fuzzer = Fuzzer(
-        version=interface.version,
-        robot=interface.robot,
-        topic_name=interface.topic,
-        headless=interface.headless,
-        asan=interface.asan
-    )
-    fuzzer.run()
+    while True:
+        fuzzer = Fuzzer(
+            version=interface.version,
+            robot=interface.robot,
+            topic_name=interface.topic,
+            headless=interface.headless,
+            asan=interface.asan
+        )
+        fuzzer.run()

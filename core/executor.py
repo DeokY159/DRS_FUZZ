@@ -18,7 +18,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Header
 from subprocess import Popen, PIPE
 
-RETRY_MAX_ATTEMPTS = 10
+RETRY_MAX_ATTEMPTS = 5
 TIME_DELAY        = 2.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
@@ -30,18 +30,25 @@ class FuzzContainer:
     """
     ROBOT_MODELS = {"turtlebot3": "burger"}
 
-    def __init__(self, version: str, robot: str, dds_map: dict, headless: bool = False, asan: bool = False) -> None:
-        self.version      = version
-        self.robot        = robot
-        self.dds_map      = dds_map
-        self.headless     = headless
-        self.network_name = "drs_fuzz"
-        self.network_iface= "none"
-        self.subnet       = "192.168.10.0/24"
+    def __init__(self, version: str, robot: str, dds_map: dict, dds_domain: dict, inspector_ip: str,
+                 headless: bool = False, asan: bool = False) -> None:
+        self.version        = version
+        self.robot          = robot
+        self.dds_map        = dds_map
+        self.dds_domain     = dds_domain
+        self.headless       = headless
+        self.network_name   = "drs_fuzz"
+        self.network_iface  = None
+        self.subnet         = "192.168.10.0/24"
         parts = [f"fuzzer_{version}_{robot}"]
-        if asan:     parts.append("asan")
-        self.image_tag = "_".join(parts)
+        if asan: parts.append("asan")
+        self.image_tag     = "_".join(parts)
         self.log_procs: list[tuple[Popen, any]] = []
+
+        # Inspector 전용 컨테이너 정보
+        self.domain_map     = {}    # rmw_impl → domain_id
+        self.inspector_name = "drs_inspector"
+        self.inspector_ip   = inspector_ip
 
     def _docker_exec(self, container: str, cmd: list) -> None:
         try:
@@ -92,8 +99,18 @@ class FuzzContainer:
         self.network_iface = f"br-{network_id[:12]}"
         debug(f"Docker network 'name:{self.network_name}','id:{self.network_iface}'")
 
-        # launch containers and capture logs
-        domain_id = 1
+
+        # 1) Inspector 전용 컨테이너 (토픽 info 전용)
+        info(f"Starting inspector container '{self.inspector_name}' on '{self.network_name}'")
+        subprocess.run([
+            'docker','run','--rm','-d',
+            '--net', self.network_name, '--ip', self.inspector_ip,
+            '--name', self.inspector_name, self.image_tag,
+            '-c', 'tail -f /dev/null'
+        ], check=True)
+        time.sleep(TIME_DELAY)
+
+        # 2) RMW별 본 컨테이너 (Gazebo + robot spawn)
         for rmw_impl, dds_ip in self.dds_map.items():
             cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Starting container '{cname}' on '{self.network_name}'")
@@ -102,7 +119,7 @@ class FuzzContainer:
                     'docker','run','--rm','-d','--privileged',
                     '-e', f"DISPLAY={os.environ.get('DISPLAY')}",
                     '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
-                    '-e', f"ROS_DOMAIN_ID={domain_id}",
+                    '-e', f"ROS_DOMAIN_ID={self.dds_domain[rmw_impl]}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
                     '--net', self.network_name, '--ip', dds_ip,
                     '--cpus', DOCKER_CPU_CORES,
@@ -112,43 +129,50 @@ class FuzzContainer:
                     '-c','tail -f /dev/null'
                 ], check=True)
 
-                # capture logs to output/logs/{container}.log
+                # capture log
                 log_path = os.path.join(logs_dir, f"{cname}.log")
-                with open(log_path,'w'):
-                    pass
-                log_file = open(log_path, 'a')
-                proc = Popen(['docker', 'logs', '-f', cname], stdout=log_file, stderr=log_file, text=True)
-                self.log_procs.append((proc, log_file))
+                with open(log_path, 'w'): pass
+                lf = open(log_path, 'a')
+                proc = Popen(['docker','logs','-f', cname],
+                             stdout=lf, stderr=lf, text=True)
+                self.log_procs.append((proc, lf))
 
                 info(f"Container '{cname}' started and logging to {log_path}")
-                domain_id +=1
             except subprocess.CalledProcessError as e:
                 error(f"Failed to start '{cname}': {e}")
+            
 
     def run_gazebo(self) -> None:
         #launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py"
         launch = "turtlebot3_world.headless.launch.py" if self.headless else "empty_world.launch.py"
-        for dds_name in self.dds_map:
-            cname = f"{self.version}_{self.robot}_{dds_name}"
+        for rmw_impl in self.dds_map:
+            cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Launching Gazebo in '{cname}'")
             subprocess.run([
-                'docker','exec','-d',cname,'bash','-ic',
-                f'ros2 launch turtlebot3_gazebo {launch} > /proc/1/fd/1 2>/proc/1/fd/2 &'
+                'docker','exec','-d', 
+                # for cyclonedds port
+                '-e', "CYCLONEDDS_URI=<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex></Discovery></Domain></CycloneDDS>", 
+                cname, 'bash','-ic',
+                f'ros2 launch turtlebot3_gazebo {launch} '
+                f'> /proc/1/fd/1 2>/proc/1/fd/2 &'
             ], check=True)
             self._wait_for_log(cname, r'process has finished cleanly')
             time.sleep(TIME_DELAY)
             done(f"Gazebo up in '{cname}'")
-            self.delete_robot(dds_name)
-            time.sleep(TIME_DELAY)
+            self.delete_robot(rmw_impl)
 
-    def spawn_robot(self,rmw_impl) -> None:
+
+    def spawn_robot(self, rmw_impl: str) -> None:
         if self.robot not in self.ROBOT_MODELS:
             error(f"Unsupported robot: '{self.robot}'")
             sys.exit(1)
-        
         cname = f"{self.version}_{self.robot}_{rmw_impl}"
-        info(f"Spawning robot in '{cname}' (detached)...")
-        sdf = f"/root/turtlebot3_ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models/turtlebot3_{self.ROBOT_MODELS[self.robot]}/model.sdf"
+        info(f"Spawning robot in '{cname}' (detached).")
+        sdf = (
+            "/root/turtlebot3_ws/install/turtlebot3_gazebo/"
+            f"share/turtlebot3_gazebo/models/turtlebot3_"
+            f"{self.ROBOT_MODELS[self.robot]}/model.sdf"
+        )
         cmd = (
             "ros2 run gazebo_ros spawn_entity.py "
             f"-entity {self.ROBOT_MODELS[self.robot]} "
@@ -160,10 +184,7 @@ class FuzzContainer:
         time.sleep(TIME_DELAY)
         done(f"Robot spawned in '{cname}'")
 
-    def delete_robot(self,rmw_impl) -> None:
-        if self.robot not in self.ROBOT_MODELS:
-            return
-
+    def delete_robot(self, rmw_impl: str) -> None:
         cname = f"{self.version}_{self.robot}_{rmw_impl}"
         info(f"Deleting robot in '{cname}' (detached)...")
         args = f"{{name: '{self.ROBOT_MODELS[self.robot]}'}}"
@@ -183,13 +204,13 @@ class FuzzContainer:
             proc.terminate()
             lf.close()
         self.log_procs.clear()
-
-        # stop containers
+        # delete containers
         for rmw_impl in self.dds_map:
             cname = f"{self.version}_{self.robot}_{rmw_impl}"
-            info(f"Stopping container '{cname}'")
-            subprocess.run(['docker','stop', cname], check=False)
-
+            info(f"Deleting container '{cname}'")
+            subprocess.run(['docker','rm','-f', cname], check=False)
+        subprocess.run(['docker','rm','-f', self.inspector_name], check=False)
+        # remove network
         #info(f"Removing Docker network: {self.network_name}")
         #subprocess.run(['docker','network','rm', self.network_name], check=False)
 

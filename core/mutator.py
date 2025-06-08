@@ -278,6 +278,7 @@ class RTPSPacket:
             arr = bytearray(self.seed_payload)
             self.packet_mutation_strategy(arr, self.bound)
             self.mutated_payloads.append(bytes(arr))
+            debug(f"{mutation_cnt}:{arr.hex()}")
 
         """
         For reproducing
@@ -290,18 +291,29 @@ class RTPSPacket:
 
     def build_base_packet(self, rmw_impl: str, inspect_info: str) -> None:
         """
-        Parse inspect_info JSON for GIDs, set prefixes/IDs,
+        Parse inspect_info JSON for GIDs (publisher/subscriber), set prefixes/IDs,
         then build a base RTPS packet.
         """
         try:
-            info = json.loads(inspect_info)
-            wg = bytes(int(x, 16) for x in info["publisher"]["gid"].split("."))
-            rg = bytes(int(x, 16) for x in info["subscriber"]["gid"].split("."))
+            data = json.loads(inspect_info)
+            pub = data["publisher"]
+            sub = data["subscriber"]
+
+            # 'gid' 또는 'GID' 키 지원
+            pub_gid = pub.get("gid") or pub.get("GID")
+            sub_gid = sub.get("gid") or sub.get("GID")
+            if not pub_gid or not sub_gid:
+                raise KeyError("GID")
+
+            wg = bytes(int(x, 16) for x in pub_gid.split("."))
+            rg = bytes(int(x, 16) for x in sub_gid.split("."))
+
+            self.w_prefix, self.w_eid = wg[:12], wg[12:16]
+            self.r_prefix, self.r_eid = rg[:12], rg[12:16]
+
         except (json.JSONDecodeError, KeyError) as e:
             raise RuntimeError(f"Invalid inspect_info format: {e}") from e
 
-        self.w_prefix, self.w_eid = wg[:12], wg[12:16]
-        self.r_prefix, self.r_eid = rg[:12], rg[12:16]
 
         self.hdr  = self._build_header(rmw_impl)
         self.dst  = self._build_info_dst()
