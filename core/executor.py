@@ -115,7 +115,7 @@ class FuzzContainer:
                     '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
                     '-e', f"ROS_DOMAIN_ID={self.dds_domain[rmw_impl]}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
-                    '-v',f'{logs_dir}/dds_api:/tmp/',
+                    '-v',f'{logs_dir}/dds_api:/tmp/DRSFuzz',
                     '--net', self.network_name, '--ip', dds_ip,
                     '--cpus', DOCKER_CPU_CORES,
                     '--memory', DOCKER_MEMORY,
