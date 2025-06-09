@@ -17,6 +17,7 @@ from scapy.all import sendp, Ether, IP, UDP
 from scapy.contrib.rtps import RTPSMessage
 
 import core.inspector as inspector
+import core.oracle as oracle
 from core.executor import FuzzContainer, RobotStateMonitor
 from core.mutator import RTPSPacket, DDSConfig
 from core.ui import info, error, debug
@@ -35,11 +36,13 @@ UDP_SPORT          = 45569  # source UDP port for RTPS
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
 LOGS_DIR      = os.path.join(OUTPUT_DIR, 'logs')
 CRASH_DIR     = os.path.join(OUTPUT_DIR, 'crash')
+BUG_DIR       = os.path.join(OUTPUT_DIR, 'semantic_bug')
 STATE_LOG     = os.path.join(LOGS_DIR, 'current_state.log')
 
 # ensure output directories exist
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(CRASH_DIR, exist_ok=True)
+os.makedirs(BUG_DIR, exist_ok=True)
 
 # initialize state log (clear or create)
 with open(STATE_LOG, 'w') as f:
@@ -141,8 +144,10 @@ class FuzzPublisher(Node):
         self.seq_num += 1
 
         if self.seq_num > MESSAGES_PER_RUN + 1:
-            #self.state_monitor.record_robot_states(self.rmw_impl,self.dds_id)
-            #time.sleep(RUN_DELAY)
+            info("Stopping Robot")
+            time.sleep(5)
+            self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
+            time.sleep(RETRY_DELAY)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
@@ -184,6 +189,7 @@ class Fuzzer:
 
         # initialize state counters
         self.crash_count = 0
+        self.bug_count   = 0
         self.run_count   = 0
         self.stage       = 0
         self.round       = 0
@@ -204,7 +210,34 @@ class Fuzzer:
         info(msg)
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
-        
+
+    def copy_logs(self, type: str) -> None:
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        if type == 'crash':
+            base_dir = os.path.join(CRASH_DIR, timestamp)
+            msg = f"Crash #{self.crash_count} detected; data & logs saved to {base_dir}"
+
+        elif type == 'semantic_bug':
+            base_dir = os.path.join(BUG_DIR, timestamp)
+            msg = f"Semantic Bug #{self.bug_count} detected; data & logs saved to {base_dir}"
+
+        with open(STATE_LOG, 'a') as f:
+            f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
+
+        if os.path.isdir(LOGS_DIR):
+            shutil.copytree(LOGS_DIR, base_dir, dirs_exist_ok=True)
+
+        qos_file = os.path.join(base_dir, 'qos.txt')
+        with open(qos_file, 'w') as fp:
+            qos = self.dds_config.get_qos()
+            fp.write(f"QoS Profile:\n")
+            fp.write(f"  durability: {qos.durability.name}\n")
+            fp.write(f"  history: {qos.history.name}\n")
+            fp.write(f"  depth: {qos.depth}\n")
+            fp.write(f"  liveliness: {qos.liveliness.name}\n")
+
+        info(msg)
 
     def _check_asan(self, log_path: str) -> bool:
         """Check if ASAN error appears in given log file."""
@@ -216,51 +249,14 @@ class Fuzzer:
 
     def _handle_crash(self) -> None:
         """Save crash data (packets, QoS, logs) and restart containers."""
-        self.crash_count += 1
-        timestamp   = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        crash_base  = os.path.join(CRASH_DIR, timestamp)
-        packets_dir = os.path.join(crash_base, 'packets')
-        os.makedirs(packets_dir, exist_ok=True)
-
-        # save all mutated payloads
-        for idx, payload in enumerate(self.rtps.mutated_payloads, start=1):
-            path = os.path.join(packets_dir, f"mutated_{idx}.bin")
-            with open(path, 'wb') as fp:
-                fp.write(payload)
-
-        # save QoS settings
-        qos_file = os.path.join(crash_base, 'qos.txt')
-        with open(qos_file, 'w') as fp:
-            qos = self.dds_config.get_qos()
-            fp.write(f"QoS Profile:\n")
-            fp.write(f"  durability: {qos.durability.name}\n")
-            fp.write(f"  history: {qos.history.name}\n")
-            fp.write(f"  depth: {qos.depth}\n")
-            fp.write(f"  liveliness: {qos.liveliness.name}\n")
-
-        # log crash and state data
-        msg = f"Crash #{self.crash_count} detected; data & logs saved to {crash_base}"
-        info(msg)
-        with open(STATE_LOG, 'a') as f:
-            f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
-
-        shutil.copy(STATE_LOG, os.path.join(crash_base, 'state.log'))
-
-        for fname in os.listdir(LOGS_DIR):
-            src = os.path.join(LOGS_DIR, fname)
-            if fname == os.path.basename(STATE_LOG):
-                continue
-            if fname.endswith('.log'):
-                shutil.copy(src, os.path.join(crash_base, fname))
-                with open(src, 'w') as f:
-                    pass
+        self.copy_logs(type="crash")
 
         # restart containers
         self.container.close_docker()
         self.container.run_docker()
         self.container.run_gazebo()
 
-    def _detect_and_handle(self) -> None:
+    def detect_and_handle_crash(self) -> None:
         """Check ASAN in container logs and handle crash."""
         for rmw_impl in self.DST_IP_MAP:
             cname    = f"{self.version}_{self.robot}_{rmw_impl}"
@@ -365,12 +361,16 @@ class Fuzzer:
 
                 for rmw_impl in self.DST_IP_MAP.keys():
                     self.gen_packet_sender(rmw_impl, self.rtps.mutated_payloads)
-                    self._detect_and_handle()
+                    self.detect_and_handle_crash()
                     time.sleep(RUN_DELAY)
 
+                if(oracle.check_robot_states_diff(robot=self.robot, threshold=30.0)):
+                    self.copy_logs(type="semantic_bug")
                 
                 info(f"----> Round {self.round} completed")
+
                 self.round += 1
+                
 
         except KeyboardInterrupt:
             info("Interrupted by user")

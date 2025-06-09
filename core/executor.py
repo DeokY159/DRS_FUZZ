@@ -1,21 +1,13 @@
 # core/executor.py
 import os
-import pickle
 import rclpy
 import re
 import subprocess
 import sys
 import time
-import yaml
 
 from builtin_interfaces.msg import Time
 from core.ui import info, error, warn, done, debug
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
-from nav_msgs.msg import Odometry
-from rclpy.serialization import deserialize_message
-from sensor_msgs.msg import Imu
-from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Header
 from subprocess import Popen, PIPE
 
 RETRY_MAX_ATTEMPTS = 5
@@ -75,13 +67,11 @@ class FuzzContainer:
         info("Granting X server access: xhost +local:root")
         subprocess.run(['xhost', '+local:root'], check=True)
 
-        dirs = [
-            os.path.join(os.getcwd(), 'output', 'logs'),
-            os.path.join(os.getcwd(), 'output', 'logs', 'dds_api')
-        ]
-
-        for d in dirs:
-            os.makedirs(d, exist_ok=True)
+        # ensure output/logs dir
+        logs_dir = os.path.join(os.getcwd(), 'output', 'logs')
+        dds_api_dir = os.path.join(logs_dir, 'dds_api')
+        os.makedirs(logs_dir, exist_ok=True)
+        os.makedirs(dds_api_dir, exist_ok=True)
 
         # docker network
         result = subprocess.run(
@@ -148,8 +138,8 @@ class FuzzContainer:
             
 
     def run_gazebo(self) -> None:
-        launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py" # old version
-        #launch = "empty_world.headless.launch.py" if self.headless else "empty_world.launch.py"
+        #launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py" # old version
+        launch = "empty_world.headless.launch.py" if self.headless else "empty_world.launch.py"
         for rmw_impl in self.dds_map:
             cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Launching Gazebo in '{cname}'")
@@ -277,93 +267,3 @@ class RobotStateMonitor:
 
             except OSError as e:
                 raise RuntimeError(f"Cannot write to '{log_path}': {e}")
-
-        # 수집된 YAML 로그들을 파싱해서 PKL로 변환
-        self._convert_logs_to_pkl(rmw_impl)
-
-    def _parse_imu_from_log(self, log_path: str) -> Imu:
-        with open(log_path, 'r', encoding='utf-8') as f:
-            data = next(yaml.safe_load_all(f))
-        msg = Imu()
-        msg.header.stamp.sec = data['header']['stamp']['sec']
-        msg.header.stamp.nanosec = data['header']['stamp']['nanosec']
-        msg.header.frame_id = data['header']['frame_id']
-        # Orientation
-        msg.orientation.x = data['orientation']['x']
-        msg.orientation.y = data['orientation']['y']
-        msg.orientation.z = data['orientation']['z']
-        msg.orientation.w = data['orientation']['w']
-        msg.orientation_covariance = data['orientation_covariance']
-
-        # Angular velocity
-        msg.angular_velocity.x = data['angular_velocity']['x']
-        msg.angular_velocity.y = data['angular_velocity']['y']
-        msg.angular_velocity.z = data['angular_velocity']['z']
-        msg.angular_velocity_covariance = data['angular_velocity_covariance']
-
-        # Linear acceleration
-        msg.linear_acceleration.x = data['linear_acceleration']['x']
-        msg.linear_acceleration.y = data['linear_acceleration']['y']
-        msg.linear_acceleration.z = data['linear_acceleration']['z']
-        msg.linear_acceleration_covariance = data['linear_acceleration_covariance']
-        return msg
-
-    def _parse_laser_from_log(self, log_path: str) -> LaserScan:
-        with open(log_path, 'r', encoding='utf-8') as f:
-            data = next(yaml.safe_load_all(f))
-        msg = LaserScan()
-        msg.header.stamp.sec = data['header']['stamp']['sec']
-        msg.header.stamp.nanosec = data['header']['stamp']['nanosec']
-        msg.header.frame_id = data['header']['frame_id']
-        msg.angle_min = data['angle_min']
-        msg.angle_max = data['angle_max']
-        msg.angle_increment = data['angle_increment']
-        msg.time_increment = data['time_increment']
-        msg.scan_time = data['scan_time']
-        msg.range_min = data['range_min']
-        msg.range_max = data['range_max']
-        msg.ranges = self._sanitize(data['ranges'])
-        msg.intensities = self._sanitize(data['intensities'])
-        return msg
-
-    def _parse_odom_from_log(self, log_path: str) -> Odometry:
-        with open(log_path, 'r', encoding='utf-8') as f:
-            data = next(yaml.safe_load_all(f))
-        msg = Odometry()
-        msg.header.stamp.sec = data['header']['stamp']['sec']
-        msg.header.stamp.nanosec = data['header']['stamp']['nanosec']
-        msg.header.frame_id = data['header']['frame_id']
-        msg.child_frame_id = data['child_frame_id']
-        pos = data['pose']['pose']['position']
-        ori = data['pose']['pose']['orientation']
-        msg.pose.pose.position = Point(x=pos['x'], y=pos['y'], z=pos['z'])
-        msg.pose.pose.orientation = Quaternion(
-            x=ori['x'], y=ori['y'], z=ori['z'], w=ori['w']
-        )
-        msg.pose.covariance = data['pose']['covariance']
-        lin = data['twist']['twist']['linear']
-        ang = data['twist']['twist']['angular']
-        msg.twist.twist.linear = Vector3(x=lin['x'], y=lin['y'], z=lin['z'])
-        msg.twist.twist.angular = Vector3(x=ang['x'], y=ang['y'], z=ang['z'])
-        msg.twist.covariance = data['twist']['covariance']
-        return msg
-
-    def _convert_logs_to_pkl(self, rmw_impl: str) -> None:
-        log_dir = f"./output/logs/robot_states/{self.robot}/{rmw_impl}"
-        msgs = []
-        for topic in self.targets:
-            path = f"{log_dir}/{topic}.log"
-            if topic == 'imu':
-                msgs.append(self._parse_imu_from_log(path))
-            elif topic == 'odom':
-                msgs.append(self._parse_odom_from_log(path))
-            elif topic == 'scan':
-                msgs.append(self._parse_laser_from_log(path))
-
-        pkl_path = f"{log_dir}/robot_state_{rmw_impl}.pkl"
-        with open(pkl_path, "wb") as f:
-            pickle.dump(msgs, f)
-        info(f"Robot states saved to '{pkl_path}'")
-
-    def _sanitize(self, ranges_raw):
-        return [float(v) for v in ranges_raw if v not in (None, '...')]
