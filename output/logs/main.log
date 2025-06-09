@@ -1,0 +1,99 @@
+[94m[FUZZER INFO][0m Starting fuzzer with version='humble', robot='turtlebot3', topic='cmd_vel', headless=False, asan=False
+[94m[FUZZER INFO][0m Initial state: version=humble, robot=turtlebot3, topic=cmd_vel
+[94m[FUZZER INFO][0m Bringing up containers & Gazebo for humble/turtlebot3
+[94m[FUZZER INFO][0m Granting X server access: xhost +local:root
+[92m[FUZZER DONE][0m Docker network 'drs_fuzz' already exists.
+[95m[FUZZER DEBUG][0m Docker network 'name:drs_fuzz','id:br-fd623c30371d'
+[94m[FUZZER INFO][0m Starting inspector container 'drs_inspector' on 'drs_fuzz'
+[94m[FUZZER INFO][0m Starting container 'humble_turtlebot3_rmw_fastrtps_cpp' on 'drs_fuzz'
+[94m[FUZZER INFO][0m Container 'humble_turtlebot3_rmw_fastrtps_cpp' started and logging to /home/b0r1/DRS_FUZZ/output/logs/humble_turtlebot3_rmw_fastrtps_cpp.log
+[94m[FUZZER INFO][0m Starting container 'humble_turtlebot3_rmw_cyclonedds_cpp' on 'drs_fuzz'
+[94m[FUZZER INFO][0m Container 'humble_turtlebot3_rmw_cyclonedds_cpp' started and logging to /home/b0r1/DRS_FUZZ/output/logs/humble_turtlebot3_rmw_cyclonedds_cpp.log
+[94m[FUZZER INFO][0m Launching Gazebo in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'process has finished cleanly' in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_fastrtps_cpp] log matched: process has finished cleanly
+[92m[FUZZER DONE][0m Gazebo up in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[94m[FUZZER INFO][0m Deleting robot in 'humble_turtlebot3_rmw_fastrtps_cpp' (detached)...
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'Successfully deleted entity' in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_fastrtps_cpp] log matched: Successfully deleted entity
+[92m[FUZZER DONE][0m Robot deleted in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[94m[FUZZER INFO][0m Launching Gazebo in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'process has finished cleanly' in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_cyclonedds_cpp] log matched: process has finished cleanly
+[92m[FUZZER DONE][0m Gazebo up in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[94m[FUZZER INFO][0m Deleting robot in 'humble_turtlebot3_rmw_cyclonedds_cpp' (detached)...
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'Successfully deleted entity' in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_cyclonedds_cpp] log matched: Successfully deleted entity
+[92m[FUZZER DONE][0m Robot deleted in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[94m[FUZZER INFO][0m @@@@@@@@@@@@@@@@@@@@@@@@@@@
+[94m[FUZZER INFO][0m Fuzz loop Entrance...
+[94m[FUZZER INFO][0m @@@@@@@@@@@@@@@@@@@@@@@@@@@
+[94m[FUZZER INFO][0m ==> Stage 0: QoS settings updated
+[95m[FUZZER DEBUG][0m 10:ff7f00807f00007fff80ff7f80800080007f7f7f8000ffff80ff8080ffff80ff7f0000ff00ff80807f807f80007f8000
+[95m[FUZZER DEBUG][0m 10:7f007f7fff00007fff7f8080007f8080ff7f000000ff00ffffff808000007f807fff00ff80ffff7fff0000ffffffffff
+[95m[FUZZER DEBUG][0m 10:80008000800000ff008080ff00007f7f80ff7fff00ff7f807f8080ff7f7f7f00807fffff00ffff7f800080ff007fff00
+[95m[FUZZER DEBUG][0m 10:ff00007f00ff807f7f807f7f7fffff7f7fff808000ff808000ff7f0000ff00ffff7f7f808000ffff7f8000007f00ff7f
+[95m[FUZZER DEBUG][0m 10:7fff7f000000ffff80ff7f807f807f0000007fff7f80ffff007f7f7fff00807fff8000007fff7f007f7fff7f007f0080
+[95m[FUZZER DEBUG][0m 10:00808080ff00808000807fff80ff7f7fff7f807f7f7fffff00ffff80007f7f80ff00ffff807f80000000ffffff000080
+[95m[FUZZER DEBUG][0m 10:0000ff7f007f007f7f7f7f7fff008080ffff80ff7f8080ffff007f007f00ff00007f7fff00ffff007fff7f7f807f80ff
+[95m[FUZZER DEBUG][0m 10:7fff00ff7f007f800000ffff7f008080ff8080800000ff0000007f000080ff7f00007f807f0080ff807f7f807fff80ff
+[95m[FUZZER DEBUG][0m 10:7fff7f7fff007f00ff7f00ff007f007fff00807f0080807fff8080000000ffff7f7f00ff80008080ff80807f0080007f
+[95m[FUZZER DEBUG][0m 10:ff807f7f7f7f8000007f80007f7f00ffff7f807fff7fff80007fff0080ff00ff000000007f8080ff807f80ffff000000
+[94m[FUZZER INFO][0m Run #1: RMW implementation = rmw_fastrtps_cpp
+[94m[FUZZER INFO][0m Spawning robot in 'humble_turtlebot3_rmw_fastrtps_cpp' (detached).
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'process has finished cleanly' in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_fastrtps_cpp] log matched: process has finished cleanly
+[92m[FUZZER DONE][0m Robot spawned in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[94m[FUZZER INFO][0m Retrying topic info (attempt 1)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=1)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=2)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=3)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=4)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=5)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=6)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=7)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=8)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=9)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=10)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.10:7665 (seq=11)
+[94m[FUZZER INFO][0m Stopping Robot
+[94m[FUZZER INFO][0m Robot State(/imu) log has saved to './output/logs/robot_states/turtlebot3/rmw_fastrtps_cpp/imu.log'
+[94m[FUZZER INFO][0m Robot State(/odom) log has saved to './output/logs/robot_states/turtlebot3/rmw_fastrtps_cpp/odom.log'
+[94m[FUZZER INFO][0m Robot State(/scan) log has saved to './output/logs/robot_states/turtlebot3/rmw_fastrtps_cpp/scan.log'
+[94m[FUZZER INFO][0m Robot states has been saved to ./output/logs/robot_states/turtlebot3/rmw_fastrtps_cpp/robot_state_rmw_fastrtps_cpp.pkl
+[94m[FUZZER INFO][0m Sent all messages for RMW='rmw_fastrtps_cpp'
+[94m[FUZZER INFO][0m Deleting robot in 'humble_turtlebot3_rmw_fastrtps_cpp' (detached)...
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'Successfully deleted entity' in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_fastrtps_cpp] log matched: Successfully deleted entity
+[92m[FUZZER DONE][0m Robot deleted in 'humble_turtlebot3_rmw_fastrtps_cpp'
+[94m[FUZZER INFO][0m Run #2: RMW implementation = rmw_cyclonedds_cpp
+[94m[FUZZER INFO][0m Spawning robot in 'humble_turtlebot3_rmw_cyclonedds_cpp' (detached).
+[95m[FUZZER DEBUG][0m Waiting for log pattern 'process has finished cleanly' in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[92m[FUZZER DONE][0m [humble_turtlebot3_rmw_cyclonedds_cpp] log matched: process has finished cleanly
+[92m[FUZZER DONE][0m Robot spawned in 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[94m[FUZZER INFO][0m Retrying topic info (attempt 1)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=1)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=2)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=3)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=4)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=5)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=6)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=7)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=8)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=9)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=10)
+[94m[FUZZER INFO][0m Packet sent to 192.168.10.20:7915 (seq=11)
+[94m[FUZZER INFO][0m Stopping Robot
+[94m[FUZZER INFO][0m Robot State(/imu) log has saved to './output/logs/robot_states/turtlebot3/rmw_cyclonedds_cpp/imu.log'
+[91m[FUZZER ERROR][0m FuzzPublisher error: Subprocess for topic 'odom' failed with code 1
+[94m[FUZZER INFO][0m ----> Round 1 completed
+[94m[FUZZER INFO][0m Interrupted by user
+[94m[FUZZER INFO][0m Deleting robot and tearing down containers
+[94m[FUZZER INFO][0m Deleting container 'humble_turtlebot3_rmw_fastrtps_cpp'
+[94m[FUZZER INFO][0m Deleting container 'humble_turtlebot3_rmw_cyclonedds_cpp'
+[94m[FUZZER INFO][0m Initial state: version=humble, robot=turtlebot3, topic=cmd_vel
+[94m[FUZZER INFO][0m Bringing up containers & Gazebo for humble/turtlebot3
+[94m[FUZZER INFO][0m Granting X server access: xhost +local:root
+[92m[FUZZER DONE][0m Docker network 'drs_fuzz' already exists.
+[95m[FUZZER DEBUG][0m Docker network 'name:drs_fuzz','id:br-fd623c30371d'
+[94m[FUZZER INFO][0m Starting inspector container 'drs_inspector' on 'drs_fuzz'

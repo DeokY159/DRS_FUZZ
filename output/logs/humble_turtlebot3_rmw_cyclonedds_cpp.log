@@ -1,0 +1,58 @@
+[INFO] [launch]: All log files can be found below /root/.ros/log/2025-06-09-06-59-46-793999-a57844ab0181-77
+[INFO] [launch]: Default logging verbosity is set to INFO
+urdf_file_name : turtlebot3_burger.urdf
+urdf_file_name : turtlebot3_burger.urdf
+[INFO] [gzserver-1]: process started with pid [78]
+[INFO] [gzclient-2]: process started with pid [80]
+[INFO] [robot_state_publisher-3]: process started with pid [82]
+[INFO] [spawn_entity.py-4]: process started with pid [84]
+[robot_state_publisher-3] [INFO] [1749452410.455546465] [robot_state_publisher]: got segment base_footprint
+[robot_state_publisher-3] [INFO] [1749452410.455896165] [robot_state_publisher]: got segment base_link
+[robot_state_publisher-3] [INFO] [1749452410.455985665] [robot_state_publisher]: got segment base_scan
+[robot_state_publisher-3] [INFO] [1749452410.456047565] [robot_state_publisher]: got segment caster_back_link
+[robot_state_publisher-3] [INFO] [1749452410.456105965] [robot_state_publisher]: got segment imu_link
+[robot_state_publisher-3] [INFO] [1749452410.456164265] [robot_state_publisher]: got segment wheel_left_link
+[robot_state_publisher-3] [INFO] [1749452410.456222865] [robot_state_publisher]: got segment wheel_right_link
+[spawn_entity.py-4] [INFO] [1749452412.816348769] [spawn_entity]: Spawn Entity started
+[spawn_entity.py-4] [INFO] [1749452412.819633869] [spawn_entity]: Loading entity XML from file /root/turtlebot3_ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models/turtlebot3_burger/model.sdf
+[spawn_entity.py-4] [INFO] [1749452412.825271768] [spawn_entity]: Waiting for service /spawn_entity, timeout = 30
+[spawn_entity.py-4] [INFO] [1749452412.829187967] [spawn_entity]: Waiting for service /spawn_entity
+[gzserver-1] ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+[gzserver-1] ALSA lib conf.c:5178:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+[gzserver-1] ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+[gzserver-1] ALSA lib conf.c:5178:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+[gzserver-1] ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+[gzserver-1] ALSA lib conf.c:5178:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+[gzserver-1] ALSA lib conf.c:5701:(snd_config_expand) Evaluate error: No such file or directory
+[gzserver-1] ALSA lib pcm.c:2664:(snd_pcm_open_noupdate) Unknown PCM default
+[gzserver-1] AL lib: (EE) ALCplaybackAlsa_open: Could not open playback device 'default': No such file or directory
+[spawn_entity.py-4] [INFO] [1749452414.872053235] [spawn_entity]: Calling service /spawn_entity
+[gzserver-1] [INFO] [1749452415.666285209] [turtlebot3_imu]: <initial_orientation_as_reference> is unset, using default value of false to comply with REP 145 (world as orientation reference)
+[spawn_entity.py-4] [INFO] [1749452416.213197123] [spawn_entity]: Spawn status: SpawnEntity: Successfully spawned entity [burger]
+[gzserver-1] [INFO] [1749452416.454828085] [turtlebot3_diff_drive]: Wheel pair 1 separation set to [0.160000m]
+[gzserver-1] [INFO] [1749452416.454982285] [turtlebot3_diff_drive]: Wheel pair 1 diameter set to [0.066000m]
+[gzserver-1] [INFO] [1749452416.461834684] [turtlebot3_diff_drive]: Subscribed to [/cmd_vel]
+[gzserver-1] [INFO] [1749452416.471302983] [turtlebot3_diff_drive]: Advertise odometry on [/odom]
+[gzserver-1] [INFO] [1749452416.489202780] [turtlebot3_diff_drive]: Publishing odom transforms between [odom] and [base_footprint]
+[gzserver-1] [INFO] [1749452416.539423272] [turtlebot3_joint_state]: Going to publish joint [wheel_left_joint]
+[gzserver-1] [INFO] [1749452416.539684872] [turtlebot3_joint_state]: Going to publish joint [wheel_right_joint]
+[INFO] [spawn_entity.py-4]: process has finished cleanly [pid 84]
+requester: making request: gazebo_msgs.srv.DeleteEntity_Request(name='burger')
+
+response:
+gazebo_msgs.srv.DeleteEntity_Response(success=True, status_message='Successfully deleted entity [burger]')
+
+[INFO] [1749452512.189930989] [spawn_entity]: Spawn Entity started
+[INFO] [1749452512.204456387] [spawn_entity]: Loading entity XML from file /root/turtlebot3_ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models/turtlebot3_burger/model.sdf
+[INFO] [1749452512.222204984] [spawn_entity]: Waiting for service /spawn_entity, timeout = 30
+[INFO] [1749452512.240354481] [spawn_entity]: Waiting for service /spawn_entity
+[INFO] [1749452512.314146669] [spawn_entity]: Calling service /spawn_entity
+[gzserver-1] [INFO] [1749452512.983928260] [turtlebot3_imu]: <initial_orientation_as_reference> is unset, using default value of false to comply with REP 145 (world as orientation reference)
+[INFO] [1749452513.753560559] [spawn_entity]: Spawn status: SpawnEntity: Successfully spawned entity [burger]
+[gzserver-1] [INFO] [1749452513.940702463] [turtlebot3_diff_drive]: Wheel pair 1 separation set to [0.160000m]
+[gzserver-1] [INFO] [1749452513.940886863] [turtlebot3_diff_drive]: Wheel pair 1 diameter set to [0.066000m]
+[gzserver-1] [INFO] [1749452513.944749263] [turtlebot3_diff_drive]: Subscribed to [/cmd_vel]
+[gzserver-1] [INFO] [1749452513.948738163] [turtlebot3_diff_drive]: Advertise odometry on [/odom]
+[gzserver-1] [INFO] [1749452513.956145463] [turtlebot3_diff_drive]: Publishing odom transforms between [odom] and [base_footprint]
+[gzserver-1] [INFO] [1749452514.008532265] [turtlebot3_joint_state]: Going to publish joint [wheel_left_joint]
+[gzserver-1] [INFO] [1749452514.008795565] [turtlebot3_joint_state]: Going to publish joint [wheel_right_joint]

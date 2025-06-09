@@ -1,0 +1,8 @@
+2025-06-09T15:59:13.478715 - Fuzzing state log created
+2025-06-09T15:59:13.508427 - Initial state: version=humble, robot=turtlebot3, topic=cmd_vel
+2025-06-09T16:00:31.629696 - Stage 1
+2025-06-09T16:00:31.629870 - Mutation strategy: interesting_byte, weights: {'bit_flip': 1, 'byte_flip': 0, 'interesting_byte': 1, 'arithmetic': 1, 'swap_bytes': 1}
+2025-06-09T16:00:31.660465 - Run #1: RMW implementation = rmw_fastrtps_cpp
+2025-06-09T16:01:35.773030 - Run #2: RMW implementation = rmw_cyclonedds_cpp
+2025-06-09T16:02:33.077120 - Round 1
+2025-06-09T16:05:34.763665 - Initial state: version=humble, robot=turtlebot3, topic=cmd_vel

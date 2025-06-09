@@ -26,7 +26,7 @@ RETRY_MAX_ATTEMPTS = 10     # retry attempts for transient failures
 RETRY_DELAY        = 1.0    # seconds between retries
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
-MESSAGE_PERIOD     = 0.2    # seconds between packets
+MESSAGE_PERIOD     = 1    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
 RUN_DELAY          = 1.0    # seconds between different RMW runs
 
@@ -101,7 +101,7 @@ class FuzzPublisher(Node):
                     domain_id=self.dds_id,
                     indent=2
                 )
-                time.sleep(10)
+                time.sleep(2)
                 break
             except Exception as e:
                 if attempt == RETRY_MAX_ATTEMPTS:
@@ -117,16 +117,6 @@ class FuzzPublisher(Node):
         
 
     def _timer_callback(self) -> None:
-        if self.seq_num > MESSAGES_PER_RUN:
-            #self.state_monitor.record_robot_states(self.rmw_impl)
-            #time.sleep(RETRY_DELAY)
-            info(f"Sent all messages for RMW='{self.rmw_impl}'")
-            self.timer.cancel()
-            self.container.delete_robot(self.rmw_impl)
-            self.future.set_result(True)
-            inspector.stop_publisher(topic_name=f'/{self.topic_name}',container=self.container.inspector_name)
-            return
-
         # Use the pre-generated mutated payload
         self.rtps.ts = self.rtps._build_info_ts()
         self.rtps.data.data.serializedData = self.mutated_payloads[self.seq_num - 1]
@@ -139,8 +129,20 @@ class FuzzPublisher(Node):
             iface=self.iface,
             rtps=self.rtps
         )
+
         self.seq_num += 1
 
+        if self.seq_num > MESSAGES_PER_RUN + 1:
+            info("Stopping Robot")
+            time.sleep(3)
+            self.state_monitor.record_robot_states(self.rmw_impl)
+            time.sleep(RETRY_DELAY)
+            info(f"Sent all messages for RMW='{self.rmw_impl}'")
+            self.timer.cancel()
+            self.container.delete_robot(self.rmw_impl)
+            self.future.set_result(True)
+            inspector.stop_publisher(topic_name=f'/{self.topic_name}',container=self.container.inspector_name)
+            return
 
 class Fuzzer:
     """
@@ -349,6 +351,7 @@ class Fuzzer:
                     f.write(f"{datetime.datetime.now().isoformat()} - Round {self.round}\n")
                 info(f"----> Round {self.round} completed")
                 self.round += 1
+                input()
 
         except KeyboardInterrupt:
             info("Interrupted by user")
