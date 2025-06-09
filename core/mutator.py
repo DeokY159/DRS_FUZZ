@@ -151,14 +151,7 @@ class RTPSPacket:
         self.seed_dir   = seed_dir or os.path.join("./seed_payload", topic_name)
         self._initialize_packet_mutation_strategies() 
         self._select_input_seed()
-        
         self.mutated_payloads: list[bytes] = []
-        try:
-            stop_path = f"./stop_payload/{self.topic_name}/stop.bin"
-            with open(stop_path, 'rb') as f:
-                self.stop_payload = f.read()
-        except OSError as e:
-            raise RuntimeErrorf(f"Unable to read the file '{stop_path}': {e}") from e
 
     def _build_header(self, rmw_impl: str) -> RTPS:
         """
@@ -284,9 +277,9 @@ class RTPSPacket:
             arr = bytearray(self.seed_payload)
             self.packet_mutation_strategy(arr, self.bound)
             self.mutated_payloads.append(bytes(arr))
-            debug(f"{mutation_cnt}:{arr.hex()}")
 
-        self.mutated_payloads.append(self.stop_payload)
+        self.mutated_payloads.append(b"\x00"*48)
+        #self.mutated_payloads.append(b"\x00"*64) #jazzy
 
         """
         For reproducing

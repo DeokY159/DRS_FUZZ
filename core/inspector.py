@@ -136,7 +136,7 @@ def get_topic_info(topic_name: str,
 
 def stop_publisher(topic_name: str, container: str) -> None:
     """
-    create_publisher 로 띄운 CLI 퍼블리셔를 종료합니다.
+    kill create_publisher
     """
     subprocess.run([
         'docker', 'exec', container,

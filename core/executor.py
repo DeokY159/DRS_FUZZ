@@ -23,7 +23,7 @@ TIME_DELAY        = 2.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
-
+INSPECTOR_CNAME   = "drs_inspector"
 class FuzzContainer:
     """
     Manages Docker containers and log capture.
@@ -47,7 +47,7 @@ class FuzzContainer:
 
         # Inspector 전용 컨테이너 정보
         self.domain_map     = {}    # rmw_impl → domain_id
-        self.inspector_name = "drs_inspector"
+        self.inspector_name = INSPECTOR_CNAME
         self.inspector_ip   = inspector_ip
 
     def _docker_exec(self, container: str, cmd: list) -> None:
@@ -214,7 +214,12 @@ class FuzzContainer:
         #info(f"Removing Docker network: {self.network_name}")
         #subprocess.run(['docker','network','rm', self.network_name], check=False)
 
+
 class RobotStateMonitor:
+    """
+    drs_inspector 컨테이너 내부에서 ros2 topic echo를 실행해
+    imu, odom, scan 로그를 수집하고, 기존 파싱/PKL 변환 로직을 그대로 사용합니다.
+    """
     WATCHLIST = {
         "turtlebot3": ["imu", "odom", "scan"]
     }
@@ -223,48 +228,61 @@ class RobotStateMonitor:
         self.robot = robot
         self.targets = self.WATCHLIST[self.robot]
 
-    def record_robot_states(self, rmw_impl) -> None:
+    def record_robot_states(self, rmw_impl: str, dds_id: str) -> None:
         log_dir = f"./output/logs/robot_states/{self.robot}/{rmw_impl}"
         os.makedirs(log_dir, exist_ok=True)
 
         for topic in self.targets:
-            cmd = ["ros2", "topic", "echo", topic, "--once"]
+            # 컨테이너 내부에서 ros2 topic echo 호출
+            cmd = (
+                f"ros2 topic echo /{topic} --once"
+            )
+            docker_cmd = [
+                "docker", "exec",
+                "-e", f"RMW_IMPLEMENTATION={rmw_impl}",
+                "-e", f"ROS_DOMAIN_ID={dds_id}",
+                INSPECTOR_CNAME,
+                "bash", "-ic",
+                cmd
+            ]
+
             log_path = f"{log_dir}/{topic}.log"
             try:
                 with open(log_path, "w", encoding="utf-8") as out:
-                    pid = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
+                    proc = subprocess.Popen(
+                        docker_cmd,
+                        stdout=out,
+                        stderr=subprocess.DEVNULL
+                    )
                     try:
-                        pid.wait(timeout=30)
-                        
+                        proc.wait(timeout=30)
                     except subprocess.TimeoutExpired as e:
-                        pid.kill()
-                        pid.wait()
-                        raise RuntimeError(f"Subprocess for topic '{topic}' didn't finish in time: {e}")
+                        proc.kill()
+                        proc.wait()
+                        raise RuntimeError(
+                            f"Topic '{topic}' echo timed out: {e}"
+                        )
 
-                if pid.returncode != 0:
-                    raise RuntimeError(f"Subprocess for topic '{topic}' failed with code {pid.returncode}")
+                if proc.returncode != 0:
+                    raise RuntimeError(
+                        f"Topic '{topic}' echo failed (code {proc.returncode})"
+                    )
 
-                info(f"Robot State(/{topic}) log has saved to '{log_path}'")
+                info(f"Robot State(/{topic}) log saved to '{log_path}'")
 
             except OSError as e:
-                raise RuntimeError(f"Unable to open or write to '{log_path}': {e}")
-        
+                raise RuntimeError(f"Cannot write to '{log_path}': {e}")
+
+        # 수집된 YAML 로그들을 파싱해서 PKL로 변환
         self._convert_logs_to_pkl(rmw_impl)
 
     def _parse_imu_from_log(self, log_path: str) -> Imu:
-        try:
-            with open(log_path, 'r', encoding='utf-8') as f:
-                data = next(yaml.safe_load_all(f))
-        
-        except OSError as e:
-            raise RuntimeError(f"Can't open file '{log_path}': {e}")
-
+        with open(log_path, 'r', encoding='utf-8') as f:
+            data = next(yaml.safe_load_all(f))
         msg = Imu()
-
         msg.header.stamp.sec = data['header']['stamp']['sec']
         msg.header.stamp.nanosec = data['header']['stamp']['nanosec']
         msg.header.frame_id = data['header']['frame_id']
-
         # Orientation
         msg.orientation.x = data['orientation']['x']
         msg.orientation.y = data['orientation']['y']
@@ -283,23 +301,15 @@ class RobotStateMonitor:
         msg.linear_acceleration.y = data['linear_acceleration']['y']
         msg.linear_acceleration.z = data['linear_acceleration']['z']
         msg.linear_acceleration_covariance = data['linear_acceleration_covariance']
-
         return msg
 
     def _parse_laser_from_log(self, log_path: str) -> LaserScan:
-        try:
-            with open(log_path, 'r', encoding='utf-8') as f:
-                data = next(yaml.safe_load_all(f))
-        
-        except OSError as e:
-            raise RuntimeError(f"Can't open file '{log_path}': {e}")
-
+        with open(log_path, 'r', encoding='utf-8') as f:
+            data = next(yaml.safe_load_all(f))
         msg = LaserScan()
-
         msg.header.stamp.sec = data['header']['stamp']['sec']
         msg.header.stamp.nanosec = data['header']['stamp']['nanosec']
         msg.header.frame_id = data['header']['frame_id']
-
         msg.angle_min = data['angle_min']
         msg.angle_max = data['angle_max']
         msg.angle_increment = data['angle_increment']
@@ -309,70 +319,46 @@ class RobotStateMonitor:
         msg.range_max = data['range_max']
         msg.ranges = self._sanitize(data['ranges'])
         msg.intensities = self._sanitize(data['intensities'])
-
         return msg
 
     def _parse_odom_from_log(self, log_path: str) -> Odometry:
-        try:
-            with open(log_path, 'r', encoding='utf-8') as f:
-                data = next(yaml.safe_load_all(f))
-
-        except OSError as e:
-            raise RuntimeError(f"Can't open file '{log_path}': {e}")
-
-        msg = Odometry()    
-
+        with open(log_path, 'r', encoding='utf-8') as f:
+            data = next(yaml.safe_load_all(f))
+        msg = Odometry()
         msg.header.stamp.sec = data['header']['stamp']['sec']
         msg.header.stamp.nanosec = data['header']['stamp']['nanosec']
-        msg.header.frame_id = data['header']['frame_id']    
-
-        msg.child_frame_id = data['child_frame_id'] 
-
-        position = data['pose']['pose']['position']
-        orientation = data['pose']['pose']['orientation']
-        msg.pose.pose.position = Point(x=position['x'], y=position['y'], z=position['z'])
+        msg.header.frame_id = data['header']['frame_id']
+        msg.child_frame_id = data['child_frame_id']
+        pos = data['pose']['pose']['position']
+        ori = data['pose']['pose']['orientation']
+        msg.pose.pose.position = Point(x=pos['x'], y=pos['y'], z=pos['z'])
         msg.pose.pose.orientation = Quaternion(
-            x=orientation['x'], y=orientation['y'], z=orientation['z'], w=orientation['w']
+            x=ori['x'], y=ori['y'], z=ori['z'], w=ori['w']
         )
-        msg.pose.covariance = data['pose']['covariance']    
-
-        linear = data['twist']['twist']['linear']
-        angular = data['twist']['twist']['angular']
-        msg.twist.twist.linear = Vector3(x=linear['x'], y=linear['y'], z=linear['z'])
-        msg.twist.twist.angular = Vector3(x=angular['x'], y=angular['y'], z=angular['z'])
-        msg.twist.covariance = data['twist']['covariance']  
-
+        msg.pose.covariance = data['pose']['covariance']
+        lin = data['twist']['twist']['linear']
+        ang = data['twist']['twist']['angular']
+        msg.twist.twist.linear = Vector3(x=lin['x'], y=lin['y'], z=lin['z'])
+        msg.twist.twist.angular = Vector3(x=ang['x'], y=ang['y'], z=ang['z'])
+        msg.twist.covariance = data['twist']['covariance']
         return msg
 
     def _convert_logs_to_pkl(self, rmw_impl: str) -> None:
         log_dir = f"./output/logs/robot_states/{self.robot}/{rmw_impl}"
         msgs = []
-
         for topic in self.targets:
-            log_path = f"{log_dir}/{topic}.log"
-
+            path = f"{log_dir}/{topic}.log"
             if topic == 'imu':
-                msg = self._parse_imu_from_log(log_path)
-                msgs.append(msg)
+                msgs.append(self._parse_imu_from_log(path))
             elif topic == 'odom':
-                msg = self._parse_odom_from_log(log_path)
-                msgs.append(msg)
-            elif topic =='scan':
-                msg = self._parse_laser_from_log(log_path)
-                msgs.append(msg)
+                msgs.append(self._parse_odom_from_log(path))
+            elif topic == 'scan':
+                msgs.append(self._parse_laser_from_log(path))
 
-        try:
-            pkl_path = f"{log_dir}/robot_state_{rmw_impl}.pkl"
-            with open(pkl_path, "wb") as f:
-                pickle.dump(msgs, f)
-            info(f"Robot states has been saved to {pkl_path}")
-        except OSError as e:
-            raise RuntimeError(f"Unable to open or write to '{pkl_path}': {e}")
+        pkl_path = f"{log_dir}/robot_state_{rmw_impl}.pkl"
+        with open(pkl_path, "wb") as f:
+            pickle.dump(msgs, f)
+        info(f"Robot states saved to '{pkl_path}'")
 
     def _sanitize(self, ranges_raw):
-        cleaned = []
-        for val in ranges_raw:
-            if val == '...' or val is None:
-                continue
-            cleaned.append(float(val))
-        return cleaned
+        return [float(v) for v in ranges_raw if v not in (None, '...')]

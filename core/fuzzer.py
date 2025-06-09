@@ -28,7 +28,7 @@ PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
 MESSAGE_PERIOD     = 1    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 1.0    # seconds between different RMW runs
+RUN_DELAY          = 3.0    # seconds between different RMW runs
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
@@ -101,7 +101,6 @@ class FuzzPublisher(Node):
                     domain_id=self.dds_id,
                     indent=2
                 )
-                time.sleep(2)
                 break
             except Exception as e:
                 if attempt == RETRY_MAX_ATTEMPTS:
@@ -307,7 +306,6 @@ class Fuzzer:
             error(f"Container/Gazebo setup failed: {e}")
             self.container.close_docker()
             exit(1)
-
 
         # 2) main fuzz loop
         info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
