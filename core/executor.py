@@ -75,9 +75,13 @@ class FuzzContainer:
         info("Granting X server access: xhost +local:root")
         subprocess.run(['xhost', '+local:root'], check=True)
 
-        # ensure output/logs dir
-        logs_dir = os.path.join(os.getcwd(), 'output', 'logs')
-        os.makedirs(logs_dir, exist_ok=True)
+        dirs = [
+            os.path.join(os.getcwd(), 'output', 'logs'),
+            os.path.join(os.getcwd(), 'output', 'logs', 'dds_api')
+        ]
+
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
 
         # docker network
         result = subprocess.run(
@@ -121,6 +125,7 @@ class FuzzContainer:
                     '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
                     '-e', f"ROS_DOMAIN_ID={self.dds_domain[rmw_impl]}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
+                    '-v',f'{logs_dir}/dds_api:/tmp/',
                     '--net', self.network_name, '--ip', dds_ip,
                     '--cpus', DOCKER_CPU_CORES,
                     '--memory', DOCKER_MEMORY,
@@ -143,8 +148,8 @@ class FuzzContainer:
             
 
     def run_gazebo(self) -> None:
-        #launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py"
-        launch = "turtlebot3_world.headless.launch.py" if self.headless else "empty_world.launch.py"
+        launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py" # old version
+        #launch = "empty_world.headless.launch.py" if self.headless else "empty_world.launch.py"
         for rmw_impl in self.dds_map:
             cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Launching Gazebo in '{cname}'")

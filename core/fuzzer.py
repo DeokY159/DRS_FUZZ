@@ -24,11 +24,12 @@ from core.ui import info, error, debug
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 10     # retry attempts for transient failures
 RETRY_DELAY        = 1.0    # seconds between retries
+RUN_DELAY          = 2.0    # seconds between different RMW runs
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
-MESSAGE_PERIOD     = 1    # seconds between packets
+MESSAGE_PERIOD     = 0.2    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
-RUN_DELAY          = 3.0    # seconds between different RMW runs
+
 
 # base directories
 OUTPUT_DIR    = os.path.join(os.getcwd(), 'output')
@@ -43,6 +44,14 @@ os.makedirs(CRASH_DIR, exist_ok=True)
 # initialize state log (clear or create)
 with open(STATE_LOG, 'w') as f:
     f.write(f"{datetime.datetime.now().isoformat()} - Fuzzing state log created\n")
+    f.write(f"{datetime.datetime.now().isoformat()} - Initial Config: ")
+    f.write(f"RETRY_MAX_ATTEMPTS={RETRY_MAX_ATTEMPTS}, ")
+    f.write(f"RETRY_DELAY={RETRY_DELAY}s, ")
+    f.write(f"RUN_DELAY={RUN_DELAY}s, ")
+    f.write(f"PACKETS_PER_QOS={PACKETS_PER_QOS}, ")
+    f.write(f"MESSAGES_PER_RUN={MESSAGES_PER_RUN}, ")
+    f.write(f"MESSAGE_PERIOD={MESSAGE_PERIOD}/sec\n")
+    
 
 def send_packet(src_ip: str, dst_ip: str, dport: int, iface: str, rtps: RTPSPacket) -> None:
     """Construct and send one RTPS packet via scapy."""
@@ -132,9 +141,8 @@ class FuzzPublisher(Node):
         self.seq_num += 1
 
         if self.seq_num > MESSAGES_PER_RUN + 1:
-            
-            self.state_monitor.record_robot_states(self.rmw_impl,self.dds_id)
-            time.sleep(RUN_DELAY)
+            #self.state_monitor.record_robot_states(self.rmw_impl,self.dds_id)
+            #time.sleep(RUN_DELAY)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
@@ -187,10 +195,16 @@ class Fuzzer:
         self.state_monitor = RobotStateMonitor(self.robot)
 
         # log initial state to state log
-        msg = f"Initial state: version={self.version}, robot={self.robot}, topic={self.topic_name}"
+        msg = f"Initial state: version={self.version}, robot={self.robot}, topic={self.topic_name}" 
+        if headless:
+            msg += f", headless={self.headless}"
+        if asan:
+            msg += f", asan={self.asan}"
+            
         info(msg)
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
+        
 
     def _check_asan(self, log_path: str) -> bool:
         """Check if ASAN error appears in given log file."""
@@ -259,6 +273,7 @@ class Fuzzer:
     def gen_packet_sender(self, rmw_impl: str, mutated_payloads: list[bytes]) -> None:
         """Instantiate and run the FuzzPublisher node once."""
         os.environ["RMW_IMPLEMENTATION"] = rmw_impl
+        #os.environ["RMW_IMPLEMENTATION"] = "rmw_fastrtps_cpp" # cross test
         os.environ["ROS_DOMAIN_ID"]      = self.DOMAIN_ID_MAP[rmw_impl]
         if not rclpy.ok():
             rclpy.init()
@@ -314,13 +329,22 @@ class Fuzzer:
         try:
             while True:
                 # rotate QoS and increment stage
+
                 if (self.round - 1) % PACKETS_PER_QOS == 0:
                     self.dds_config.update_qos()
                     info(f"==> Stage {self.stage}: QoS settings updated")
                     self.stage += 1
                     self.round = 1
+                    qos = self.dds_config.get_qos()
+                    self.rtps._select_input_seed()
+
                     with open(STATE_LOG, 'a') as f:
                         f.write(f"{datetime.datetime.now().isoformat()} - Stage {self.stage}\n")
+                        f.write(f"{datetime.datetime.now().isoformat()} - Seed Selected: {self.rtps.seed_path}\n")
+                        f.write(f"{datetime.datetime.now().isoformat()} - QoS Setting durability={qos.durability.name}, history={qos.history.name}, depth={qos.depth}, liveliness={qos.liveliness.name}\n")
+                        
+                with open(STATE_LOG, 'a') as f:
+                    f.write(f"{datetime.datetime.now().isoformat()} - Round {self.round}\n")
 
                 # Generate mutated payloads once per round
                 self.rtps.update_packet_mutation_strategy()
@@ -344,11 +368,9 @@ class Fuzzer:
                     self._detect_and_handle()
                     time.sleep(RUN_DELAY)
 
-                with open(STATE_LOG, 'a') as f:
-                    f.write(f"{datetime.datetime.now().isoformat()} - Round {self.round}\n")
+                
                 info(f"----> Round {self.round} completed")
                 self.round += 1
-                input()
 
         except KeyboardInterrupt:
             info("Interrupted by user")

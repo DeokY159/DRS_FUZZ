@@ -4,7 +4,6 @@ import json
 import os
 import random
 import time
-import subprocess
 from core.ui import debug
 
 from rclpy.qos import (
@@ -120,12 +119,11 @@ class RTPSPacket:
 
     # Available mutation strategies and their default weights
     STRATEGY_SETTINGS = [
-        {"func": bit_flip,         "weight": 1},
-        {"func": byte_flip,        "weight": 0},
-        #{"func": byte_flip,        "weight": 1},
+        {"func": bit_flip,         "weight": 0.7},
+        {"func": byte_flip,        "weight": 0.2},
         {"func": interesting_byte, "weight": 1},
-        {"func": arithmetic,       "weight": 1},
-        {"func": swap_bytes,       "weight": 1},
+        {"func": arithmetic,       "weight": 0.5},
+        {"func": swap_bytes,       "weight": 0.5},
     ]
 
     # DDS Vendor IDs and version mapping by RMW implementation
@@ -149,6 +147,7 @@ class RTPSPacket:
         self.topic_name = topic_name
         self.bound      = bound
         self.seed_dir   = seed_dir or os.path.join("./seed_payload", topic_name)
+        self.seed_path  = None
         self._initialize_packet_mutation_strategies() 
         self._select_input_seed()
         self.mutated_payloads: list[bytes] = []
@@ -256,13 +255,13 @@ class RTPSPacket:
             raise RuntimeError(f"No seed files found in: {self.seed_dir}")
         
         seed_file = random.choice(seed_list)
-        seed_file_path = os.path.join(self.seed_dir, seed_file)
-
+        self.seed_path = os.path.join(self.seed_dir, seed_file)
+        
         try:
-            with open(seed_file_path, 'rb') as f:
+            with open(self.seed_path, 'rb') as f:
                 self.seed_payload = f.read()
         except OSError as e:
-            raise IOError(f"Unable to read the seed file '{seed_file_path}': {e}") from e
+            raise IOError(f"Unable to read the seed file '{self.seed_path}': {e}") from e
 
     def generate_mutated_payloads(self, mutation_cnt: int = 10) -> None:
         """
@@ -330,11 +329,11 @@ class RTPSPacket:
         self.ts.ts_seconds = random.randint(0, 0xFFFFFFFF)
         self.ts.ts_fraction = random.randint(0, 0xFFFFFFFF)
         self.ts.submessageFlags = random.randint(0, 255)
-        self.ts.octetsToNextHeader = random.randint(0, 64)
+        #self.ts.octetsToNextHeader = random.randint(0, 64)
         # 3. DATA submessage
         self.data.submessageFlags = random.randint(0, 255)
         self.data.extraFlags = random.randint(0, 255)
-        self.data.octetsToInlineQoS = random.randint(0, 64)
+        #self.data.octetsToInlineQoS = random.randint(0, 64)
         # writerSeqNumLow/serializedData는 mutate_packet에서 관리
         # 4. DATA 내부
         self.data.data.encapsulationKind = random.randint(0, 0xFFFF)

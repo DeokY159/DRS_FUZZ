@@ -14,8 +14,8 @@ git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
 git clone -b ${ROS_DISTRO} https://github.com/ROBOTIS-GIT/turtlebot3.git
 
 # for headless mode
-origin_path="/root/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world.launch.py"
-headless_path="/root/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/turtlebot3_world.headless.launch.py"
+origin_path="/root/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/empty_world.launch.py"
+headless_path="/root/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/launch/empty_world.headless.launch.py"
 cp "$origin_path" "$headless_path"
 sed -i '/ld\.add_action(gzclient_cmd)/s/^/# /' "$headless_path"
 
