@@ -132,10 +132,9 @@ class FuzzPublisher(Node):
         self.seq_num += 1
 
         if self.seq_num > MESSAGES_PER_RUN + 1:
-            info("Stopping Robot")
-            time.sleep(3)
-            self.state_monitor.record_robot_states(self.rmw_impl)
-            time.sleep(RETRY_DELAY)
+            
+            self.state_monitor.record_robot_states(self.rmw_impl,self.dds_id)
+            time.sleep(RUN_DELAY)
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
