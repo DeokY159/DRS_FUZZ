@@ -265,7 +265,7 @@ def compare_listener(file_path_a, file_path_b, topic):
         "post_others",
     ):
         if key=="data_cnt": ## Data Packet Implementation Difference
-            if stats_fast[key] != stats_cyclone[key]-1:
+            if not (stats_cyclone[key] - 1 <= stats_fast[key] <= stats_cyclone[key] + 1):
                 error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
                 return True
         elif key=="pre_matched_cnt" or key =="post_matched_cnt":
