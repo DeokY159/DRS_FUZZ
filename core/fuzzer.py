@@ -159,9 +159,6 @@ class FuzzPublisher(Node):
             time.sleep(RETRY_DELAY)
             inspector.stop_publisher(topic_name=f'/{self.topic_name}',container=self.container.inspector_name)
             return
-        
-
-
 
 class Fuzzer:
     """
