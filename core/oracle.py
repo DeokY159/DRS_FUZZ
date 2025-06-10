@@ -267,8 +267,8 @@ def compare_listener(file_path_a: list, file_path_b: list, topic: str):
         "post_others",
     ):
         if key=="data_cnt": ## Data Packet Implementation Difference
-            stats_fast[key] != stats_cyclone[key]-1
-            return True
+            if stats_fast[key] != stats_cyclone[key]-1:
+                return True
         if stats_fast[key] != stats_cyclone[key]:
             return True
     return False
