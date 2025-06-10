@@ -27,7 +27,7 @@ RETRY_DELAY        = 1.0    # seconds between retries
 RUN_DELAY          = 2.0    # seconds between different RMW runs
 PACKETS_PER_QOS    = 10     # how often to rotate QoS (in runs)
 MESSAGES_PER_RUN   = 10     # messages per spin run
-MESSAGE_PERIOD     = 0.2    # seconds between packets
+MESSAGE_PERIOD     = 0.5    # seconds between packets
 UDP_SPORT          = 45569  # source UDP port for RTPS
 
 # base directories
@@ -123,8 +123,7 @@ class FuzzPublisher(Node):
                     raise RuntimeError(f"Failed to get topic info after {RETRY_MAX_ATTEMPTS} attempts: {e}")
                 warn(f"Retrying topic info (attempt {attempt})")
                 time.sleep(RETRY_DELAY)
-            except (OSError, subprocess.SubprocessError) as e:
-                raise subprocess.SubprocessError(f"Subprocess error during topic info: {e}")  
+
                   
         # prepare mutation strategy and payloads
         self.rtps.build_base_packet(rmw_impl=self.rmw_impl, inspect_info=info_json)
@@ -149,18 +148,20 @@ class FuzzPublisher(Node):
         self.seq_num += 1
 
         if self.seq_num > MESSAGES_PER_RUN + 1:
-            # Get robot state information
-            time.sleep(RUN_DELAY)
+            info("Stopping Robot")
+            time.sleep(RETRY_DELAY*3)
             self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
-            time.sleep(RUN_DELAY)
-            
-            info(f"Finished all messages for RMW='{self.rmw_impl}'")
+            info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
+            time.sleep(RETRY_DELAY)
             self.container.delete_robot(self.rmw_impl)
             self.future.set_result(True)
+            time.sleep(RETRY_DELAY)
             inspector.stop_publisher(topic_name=f'/{self.topic_name}',container=self.container.inspector_name)
-            time.sleep(RUN_DELAY)
             return
+        
+
+
 
 class Fuzzer:
     """
@@ -224,12 +225,12 @@ class Fuzzer:
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
         if type == 'crash':
-            base_dir = os.path.join(CRASH_DIR, timestamp)
+            base_dir = os.path.join(CRASH_DIR, timestamp+"_"+type)
             msg = f"Crash #{self.crash_count} detected; data & logs saved to {base_dir}"
             warn(msg)
 
         elif type == 'semantic_bug':
-            base_dir = os.path.join(BUG_DIR, timestamp)
+            base_dir = os.path.join(BUG_DIR, timestamp+"_"+type)
             msg = f"Semantic Bug #{self.bug_count} detected; data & logs saved to {base_dir}"
             warn(msg)
 
@@ -276,8 +277,6 @@ class Fuzzer:
         os.environ["RMW_IMPLEMENTATION"] = rmw_impl
         #os.environ["RMW_IMPLEMENTATION"] = "rmw_fastrtps_cpp" # cross test
         os.environ["ROS_DOMAIN_ID"]      = self.DOMAIN_ID_MAP[rmw_impl]
-        if not rclpy.ok():
-            rclpy.init()
         if not rclpy.ok():
             rclpy.init()
         self.run_count += 1
@@ -391,7 +390,7 @@ class Fuzzer:
 
                     self.round += 1
                     
-            except RuntimeError as e:
+            except (RuntimeError,TimeoutError) as e:
                 warn("Cleaning up fuzzing container for restart...")
                 time.sleep(RUN_DELAY)
                 continue 

@@ -11,7 +11,8 @@ from core.ui import info, error, warn, done, debug
 from subprocess import Popen, PIPE
 
 RETRY_MAX_ATTEMPTS = 5
-TIME_DELAY        = 2.0
+TIME_DELAY        = 3.0
+TIME_OUT          = 90.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -48,7 +49,7 @@ class FuzzContainer:
         except Exception as e:
             raise subprocess.CalledProcessError(f"Failed to exec in '{container}': {e}")
 
-    def _wait_for_log(self, container: str, pattern: str, timeout: float = 90.0) -> None:
+    def _wait_for_log(self, container: str, pattern: str, timeout: float = TIME_OUT) -> None:
         debug(f"Waiting for log pattern '{pattern}' in '{container}'")
         proc = Popen(['docker', 'logs', '-f', container], stdout=PIPE, stderr=PIPE, text=True)
         start = time.time()
@@ -104,6 +105,9 @@ class FuzzContainer:
             subprocess.run([
                 'docker','run','--rm','-d',
                 '--net', self.network_name, '--ip', self.inspector_ip,
+                '--cpus', '2',
+                '--memory', '2g',
+                '--memory-swap', '2g',
                 '--name', self.inspector_name, self.image_tag,
                 '-c', 'tail -f /dev/null'
             ], check=True)
@@ -184,8 +188,8 @@ class FuzzContainer:
         try:
             subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
             self._wait_for_log(cname, r'process has finished cleanly')
-            time.sleep(TIME_DELAY)
             done(f"Robot spawned in '{cname}'")
+            time.sleep(TIME_DELAY)
         except Exception as e:
             raise subprocess.SubprocessError(f"Failed to spawn robot: {e}")
 
@@ -201,8 +205,8 @@ class FuzzContainer:
         try:
             subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
             self._wait_for_log(cname, r'Successfully deleted entity')
-            time.sleep(TIME_DELAY)
             done(f"Robot deleted in '{cname}'")
+            time.sleep(TIME_DELAY)
         except Exception as e:
             raise subprocess.SubprocessError(f"Failed to delete robot in '{cname}': {e}")
 
@@ -259,7 +263,7 @@ class RobotStateMonitor:
                         stderr=subprocess.DEVNULL
                     )
                     try:
-                        proc.wait(timeout=30)
+                        proc.wait(timeout=TIME_OUT)
                     except Exception as e:
                         proc.kill()
                         proc.wait()

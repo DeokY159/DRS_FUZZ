@@ -131,11 +131,12 @@ def parse_state_log():
                         num = parts[1][1:]
                         if num.isdigit():
                             state['crashes'] = int(num)
-                elif "bug:" in msg:
-                    try:
-                        state['bug'] = int(msg.split('bug:')[1].split()[0])
-                    except:
-                        pass
+                elif msg.startswith('Semantic Bug #'):
+                    parts = msg.split()
+                    if len(parts) >= 2 and parts[2].startswith('#'):
+                        num = parts[2][1:]
+                        if num.isdigit():
+                            state['bug'] = int(num)
                 elif "error:" in msg:
                     try:
                         state['error'] = int(msg.split('error:')[1].split()[0])
