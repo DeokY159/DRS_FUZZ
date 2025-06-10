@@ -248,6 +248,14 @@ class Fuzzer:
 
         info(msg)
 
+    def _check_asan(self, log_path: str) -> bool:
+        """Check if ASAN error appears in given log file."""
+        try:
+            with open(log_path, 'r', errors='ignore') as f:
+                return 'AddressSanitizer' in f.read() or 'asan:' in f.read()
+        except Exception:
+            return False
+
     def check_asan_crash(self) -> None:
         """
         Check ASAN in container logs, handle crash and raise RuntimeError for restart.
@@ -365,7 +373,7 @@ class Fuzzer:
                     fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
                     cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
 
-                    events_fast = oracle.istener_parser(fast_log)
+                    events_fast = oracle.listener_parser(fast_log)
                     events_cyclone = oracle.listener_parser(cyclone_log)
 
                     listener_oracle=oracle.compare_listener(events_fast, events_cyclone, self.topic_name)
@@ -381,7 +389,6 @@ class Fuzzer:
                     
             except RuntimeError as e:
                 warn("Cleaning up fuzzing container for restart...")
-                self.container.close_docker()
                 time.sleep(RUN_DELAY)
                 continue 
             except KeyboardInterrupt:
