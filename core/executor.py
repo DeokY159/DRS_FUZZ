@@ -11,8 +11,8 @@ from core.ui import info, error, warn, done, debug
 from subprocess import Popen, PIPE
 
 RETRY_MAX_ATTEMPTS = 5
-TIME_DELAY        = 3.0
-TIME_OUT          = 90.0
+TIME_DELAY        = 2.0
+TIME_OUT          = 20.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -38,7 +38,6 @@ class FuzzContainer:
         self.image_tag     = "_".join(parts)
         self.log_procs: list[tuple[Popen, any]] = []
         # Inspector container infomation
-        self.domain_map     = {}    # rmw_impl → domain_id
         self.inspector_name = INSPECTOR_CNAME
         self.inspector_ip   = inspector_ip
 
@@ -165,6 +164,9 @@ class FuzzContainer:
                 time.sleep(TIME_DELAY)
                 done(f"Gazebo up in '{cname}'")
                 self.delete_robot(rmw_impl)
+            except TimeoutError as e:
+                raise TimeoutError(f"Time to launch Gazebo: {e}")
+
             except Exception as e:
                 raise subprocess.SubprocessError(f"Failed to launch Gazebo: {e}")
 
@@ -190,6 +192,8 @@ class FuzzContainer:
             self._wait_for_log(cname, r'process has finished cleanly')
             done(f"Robot spawned in '{cname}'")
             time.sleep(TIME_DELAY)
+        except TimeoutError as e:
+            raise TimeoutError(f"Timeout to spawn robot: {e}")
         except Exception as e:
             raise subprocess.SubprocessError(f"Failed to spawn robot: {e}")
 
@@ -207,6 +211,8 @@ class FuzzContainer:
             self._wait_for_log(cname, r'Successfully deleted entity')
             done(f"Robot deleted in '{cname}'")
             time.sleep(TIME_DELAY)
+        except TimeoutError as e:
+            raise TimeoutError(f"Timeout to delete robot: {e}")
         except Exception as e:
             raise subprocess.SubprocessError(f"Failed to delete robot in '{cname}': {e}")
 
@@ -255,24 +261,22 @@ class RobotStateMonitor:
             ]
 
             log_path = f"{log_dir}/{topic}.log"
-            try:
-                with open(log_path, "w", encoding="utf-8") as out:
-                    proc = subprocess.Popen(
-                        docker_cmd,
-                        stdout=out,
-                        stderr=subprocess.DEVNULL
-                    )
-                    try:
-                        proc.wait(timeout=TIME_OUT)
-                    except Exception as e:
-                        proc.kill()
-                        proc.wait()
-                        raise TimeoutError(f"Topic '{topic}' echo timed out: {e}")
 
-                if proc.returncode != 0:
-                    raise subprocess.SubprocessError(f"Topic '{topic}' echo failed (code {proc.returncode})")
+            with open(log_path, "w", encoding="utf-8") as out:
+                proc = subprocess.Popen(
+                    docker_cmd,
+                    stdout=out,
+                    stderr=subprocess.DEVNULL
+                )
+                try: 
+                    proc.wait(timeout=TIME_OUT)
+                except Exception as e:
+                    proc.kill()
+                    proc.wait()
+                    raise TimeoutError(f"Topic '{topic}' echo timed out: {e}")
 
-                info(f"Robot State(/{topic}) log saved to '{log_path}'")
+            if proc.returncode != 0:
+                raise subprocess.SubprocessError(f"Topic '{topic}' echo failed (code {proc.returncode})")
 
-            except Exception as e:
-                raise OSError(f"Cannot write to '{log_path}': {e}")
+            info(f"Robot State(/{topic}) log saved to '{log_path}'")
+

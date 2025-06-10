@@ -103,15 +103,13 @@ def get_topic_info(topic_name: str,
     """
     cmd = f"ros2 topic info {topic_name} --verbose"
 
-    try:
-        proc = subprocess.run([
-            'docker', 'exec',
-            '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
-            '-e', f"ROS_DOMAIN_ID={domain_id}",
-            container, 'bash', '-ic', cmd
-        ], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except Exception as e:
-        raise subprocess.SubprocessError(f"Failed to get topic info: {e}")
+    proc = subprocess.run([
+        'docker', 'exec',
+        '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
+        '-e', f"ROS_DOMAIN_ID={domain_id}",
+        container, 'bash', '-ic', cmd
+    ], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
     
     # Parse topic info
     blocks = proc.stdout.strip().split("\n\n")

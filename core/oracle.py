@@ -266,14 +266,14 @@ def compare_listener(file_path_a, file_path_b, topic):
     ):
         if key=="data_cnt": ## Data Packet Implementation Difference
             if not (stats_cyclone[key] - 1 <= stats_fast[key] <= stats_cyclone[key] + 1):
-                error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
+                error(f"Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
                 return True
         elif key=="pre_matched_cnt" or key =="post_matched_cnt":
             if abs(stats_fast[key] - stats_cyclone[key]) > 0.15 * stats_cyclone[key]:
-                error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
+                error(f"Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
                 return True
         elif stats_fast[key] != stats_cyclone[key]:
-            error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
+            error(f"Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
             return True
 
     return False

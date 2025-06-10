@@ -327,18 +327,21 @@ class Reproducer:
                     break
 
             except (RuntimeError,TimeoutError) as e:
+                error(f"Error Occured - {e}")
                 warn("Cleaning up fuzzing container for restart...")
+                self.container.close_docker()
                 time.sleep(RUN_DELAY)
-                continue
+                continue 
             except KeyboardInterrupt:
                 error("Interrupted by user (ctrl+c)")
+                self.container.close_docker()
+                exit(0)
             except Exception as e:
                 error(f"Error occured in Fuzzing Process - {e}")
-            finally:
                 self.container.close_docker()
                 exit(0)
 
-        if validation >= 8:
+        if self.validation >= 8:
             info("The bug or crash is validated!")
         else:
             error("False Positive...")

@@ -93,8 +93,8 @@ class FuzzPublisher(Node):
 
         try:
             container.spawn_robot(self.rmw_impl)
-        except (OSError, subprocess.SubprocessError) as e:
-            raise subprocess.SubprocessError(f"Failed to spawn robot: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to spawn robot: {e}")
 
         try:
             inspector.create_publisher(
@@ -117,7 +117,7 @@ class FuzzPublisher(Node):
                     indent=2
                 )
                 break
-            except RuntimeError as e:
+            except Exception as e:
                 if attempt == RETRY_MAX_ATTEMPTS:
                     error(f"Unable to get topic info: {e}")
                     raise RuntimeError(f"Failed to get topic info after {RETRY_MAX_ATTEMPTS} attempts: {e}")
@@ -150,7 +150,10 @@ class FuzzPublisher(Node):
         if self.seq_num > MESSAGES_PER_RUN + 1:
             info("Stopping Robot")
             time.sleep(RETRY_DELAY*3)
-            self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
+            try:
+                self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
+            except TimeoutError as e:
+                raise TimeoutError
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             time.sleep(RETRY_DELAY)
@@ -196,6 +199,7 @@ class Fuzzer:
 
         # initialize state counters
         self.crash_count = 0
+        self.error_count = 0
         self.bug_count   = 0
         self.run_count   = 0
         self.stage       = 0
@@ -224,12 +228,12 @@ class Fuzzer:
         if type == 'crash':
             base_dir = os.path.join(CRASH_DIR, timestamp+"_"+type)
             msg = f"Crash #{self.crash_count} detected; data & logs saved to {base_dir}"
-            warn(msg)
+            error(msg)
 
         elif type == 'semantic_bug':
             base_dir = os.path.join(BUG_DIR, timestamp+"_"+type)
             msg = f"Semantic Bug #{self.bug_count} detected; data & logs saved to {base_dir}"
-            warn(msg)
+            error(msg)
 
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
@@ -262,6 +266,7 @@ class Fuzzer:
             cname    = f"{self.version}_{self.robot}_{rmw_impl}"
             log_path = os.path.join(LOGS_DIR, f"{cname}.log")
             if self._check_asan(log_path):
+                self.crash_count +=1
                 error(f"ASAN detected in container {cname}")
                 # Save crash logs and restart
                 self.copy_logs(type="crash")
@@ -278,7 +283,7 @@ class Fuzzer:
             rclpy.init()
         self.run_count += 1
         msg = f"Run #{self.run_count}: RMW implementation = {rmw_impl}"
-        debug(msg)
+        #debug(msg)
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")
 
@@ -313,6 +318,7 @@ class Fuzzer:
     def run(self) -> None:   
         while True:
             # 1) start containers and Gazebo
+            self.stage += 1
             try:
                 info(f"Bringing up containers & Gazebo for {self.version}/{self.robot}")
                 self.container.run_docker()
@@ -335,7 +341,6 @@ class Fuzzer:
                     if (self.round - 1) % PACKETS_PER_QOS == 0:
                         self.dds_config.update_qos()
                         info(f"==> Stage {self.stage}: QoS settings updated")
-                        self.stage += 1
                         self.round = 1
                         qos = self.dds_config.get_qos()
                         self.rtps._select_input_seed()
@@ -379,8 +384,9 @@ class Fuzzer:
                         detected_bug = True
 
                     if detected_bug:
-                        self.copy_logs("semantic_bug")
                         self.bug_count += 1
+                        self.copy_logs("semantic_bug")
+                        
 
                     if feedback.is_robot_stationary(self.robot):
                         feedback.decrease_mutation_weights(self.rtps, self.dds_config, 0.5)
@@ -388,13 +394,19 @@ class Fuzzer:
                     self.round += 1
                     
             except (RuntimeError,TimeoutError) as e:
+                error(f"Error Occured - {e}")
+                self.error_count += 1
                 warn("Cleaning up fuzzing container for restart...")
+                self.container.close_docker()
+                with open(STATE_LOG, 'a') as f:
+                    f.write(f"{datetime.datetime.now().isoformat()} - Error #{self.error_count} occured {e}\n")
                 time.sleep(RUN_DELAY)
                 continue 
             except KeyboardInterrupt:
                 error("Interrupted by user (ctrl+c)")
+                self.container.close_docker()
+                exit(0)
             except Exception as e:
                 error(f"Error occured in Fuzzing Process - {e}")
-            finally:
                 self.container.close_docker()
                 exit(0)

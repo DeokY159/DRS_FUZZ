@@ -137,11 +137,12 @@ def parse_state_log():
                         num = parts[2][1:]
                         if num.isdigit():
                             state['bug'] = int(num)
-                elif "error:" in msg:
-                    try:
-                        state['error'] = int(msg.split('error:')[1].split()[0])
-                    except:
-                        pass
+                elif msg.startswith('Error #'):
+                    parts = msg.split()
+                    if len(parts) >= 2 and parts[1].startswith('#'):
+                        num = parts[1][1:]
+                        if num.isdigit():
+                            state['error'] = int(num)
                 elif 'QoS settings updated' in msg:
                     state['qos_strategy'] = f"Stage {state['stage']} updated"
     except Exception:
