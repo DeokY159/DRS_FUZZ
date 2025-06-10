@@ -226,10 +226,12 @@ class Fuzzer:
         if type == 'crash':
             base_dir = os.path.join(CRASH_DIR, timestamp)
             msg = f"Crash #{self.crash_count} detected; data & logs saved to {base_dir}"
+            warn(msg)
 
         elif type == 'semantic_bug':
             base_dir = os.path.join(BUG_DIR, timestamp)
             msg = f"Semantic Bug #{self.bug_count} detected; data & logs saved to {base_dir}"
+            warn(msg)
 
         with open(STATE_LOG, 'a') as f:
             f.write(f"{datetime.datetime.now().isoformat()} - {msg}\n")

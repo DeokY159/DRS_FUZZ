@@ -1,13 +1,11 @@
 # main.py
 import shutil
-import subprocess
 from pathlib import Path
-from core.ui import info, error, warn, done
 
 output_dir = Path(__file__).resolve().parent / 'output'
 if output_dir.exists():
     for entry in output_dir.iterdir():
-        if entry.name == 'crash':
+        if entry.name == 'crash' or entry.name == 'semantic_bug':
             continue
         if entry.is_dir():
             shutil.rmtree(entry)
@@ -17,7 +15,7 @@ if output_dir.exists():
 import argparse
 from build.builder import Builder
 from core.fuzzer import Fuzzer
-from core.ui import info, banner
+from core.ui import info, banner, warn, error
 
 class Interface:
     def __init__(self):
@@ -45,7 +43,7 @@ if __name__ == "__main__":
     
     try:
         builder.build_docker(interface.version, interface.robot,headless=interface.headless, asan=interface.asan)
-    except (OSError, subprocess.SubprocessError) as e:
+    except Exception as e:
         error(f"Builder failed: {e}")
         exit(0)
     
