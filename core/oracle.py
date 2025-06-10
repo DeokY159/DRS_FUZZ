@@ -5,6 +5,10 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any
 import os
 from core.ui import info, error, debug
+import re
+from datetime import datetime, timezone
+from typing import List, Dict, Any
+import os
 
 def parse_imu_from_log(log_path: str) -> dict:
     with open(log_path, 'r', encoding='utf-8') as f:
@@ -263,7 +267,7 @@ def compare_listener(file_path_a: list, file_path_b: list, topic: str):
         "post_others",
     ):
         if key=="data_cnt": ## Data Packet Implementation Difference
-            stats_fast[key] != stats_cyclone[key]-1:
+            stats_fast[key] != stats_cyclone[key]-1
             return True
         if stats_fast[key] != stats_cyclone[key]:
             return True
