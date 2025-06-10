@@ -185,7 +185,7 @@ def listener_parser(file_path: str):
             events.append({"timestamp": ts, "event": event_type, "entity": entity})
     return events
 
-def compare_listener(file_path_a: list, file_path_b: list, topic: str):
+def compare_listener(file_path_a, file_path_b, topic):
     
     events_fast = listener_parser(file_path_a)
     events_cyclone = listener_parser(file_path_b)
@@ -217,9 +217,7 @@ def compare_listener(file_path_a: list, file_path_b: list, topic: str):
     # analyze events call or counts
     def analyze(seq: List[Dict[str, Any]]) -> Dict[str, Any]:
         data_events = [e for e in seq if e["type"] == "DATA_AVAILABLE"]
-        if len(data_events) >= 10:
-            cutoff = data_events[9]["timestamp"]
-        elif data_events:
+        if data_events:
             cutoff = data_events[0]["timestamp"]
         else:
             cutoff = datetime.max.replace(tzinfo=timezone.utc)
@@ -237,14 +235,14 @@ def compare_listener(file_path_a: list, file_path_b: list, topic: str):
             if et == "SUBSCRIPTION_MATCHED":
                 if t <= cutoff:
                     pre_matched += 1
-                elif t > cutoff:
+                else:
                     post_matched += 1
 
             # Other Events count
             else:
                 if t <= cutoff:
                     pre_others.add(et)
-                elif t > cutoff:
+                else:
                     post_others.add(et)
 
         return {
@@ -268,7 +266,14 @@ def compare_listener(file_path_a: list, file_path_b: list, topic: str):
     ):
         if key=="data_cnt": ## Data Packet Implementation Difference
             if stats_fast[key] != stats_cyclone[key]-1:
+                error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
                 return True
-        if stats_fast[key] != stats_cyclone[key]:
+        elif key=="pre_matched_cnt" or key =="post_matched_cnt":
+            if abs(stats_fast[key] - stats_cyclone[key]) > 0.15 * stats_cyclone[key]:
+                error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
+                return True
+        elif stats_fast[key] != stats_cyclone[key]:
+            error(f" Listener Missmatch: \"{key}: {stats_fast[key]}, {stats_cyclone[key]}\"")
             return True
+
     return False

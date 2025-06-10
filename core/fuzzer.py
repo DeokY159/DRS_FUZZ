@@ -248,8 +248,6 @@ class Fuzzer:
             fp.write(f"  depth: {qos.depth}\n")
             fp.write(f"  liveliness: {qos.liveliness.name}\n")
 
-        info(msg)
-
     def _check_asan(self, log_path: str) -> bool:
         """Check if ASAN error appears in given log file."""
         try:
