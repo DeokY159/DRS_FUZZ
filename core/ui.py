@@ -1,9 +1,7 @@
 # core/ui.py
-
 import os
 import logging
 
-# ensure output/logs dir
 logs_dir = os.path.join(os.getcwd(), 'output', 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
@@ -28,13 +26,11 @@ main_log = os.path.join(logs_dir, 'main.log')
 logger   = logging.getLogger('fuzzer')
 logger.setLevel(logging.DEBUG)
 
-# File handler: overwrite (mode='w') each run and include ANSI color codes
 fh = logging.FileHandler(main_log, mode='w')
 fh.setLevel(logging.DEBUG)
 fh.setFormatter(ColorFormatter())
 logger.addHandler(fh)
 
-# Console handler: colored output
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 ch.setFormatter(ColorFormatter())
@@ -64,7 +60,6 @@ def error(message):
     logger.error(message)
 
 def done(message):
-    # log as INFO but display as DONE
     record = logger.makeRecord(logger.name, logging.INFO, None, None, message, None, None)
     record.levelname = 'DONE'
     logger.handle(record)

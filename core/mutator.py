@@ -260,8 +260,8 @@ class RTPSPacket:
         try:
             with open(self.seed_path, 'rb') as f:
                 self.seed_payload = f.read()
-        except OSError as e:
-            raise IOError(f"Unable to read the seed file '{self.seed_path}': {e}") from e
+        except Exception as e:
+            raise OSError(f"Unable to read the seed file '{self.seed_path}': {e}") from e
 
     def generate_mutated_payloads(self, mutation_cnt: int = 10) -> None:
         """
@@ -269,7 +269,7 @@ class RTPSPacket:
         selected strategy to copies of seed_payload.
         """
         if not hasattr(self, 'packet_mutation_strategy'):
-            raise RuntimeError("mutation strategy not set: call update_packet_mutation_strategy() first")
+            raise OSError("mutation strategy not set: call update_packet_mutation_strategy() first")
 
         self.mutated_payloads.clear()
         for _ in range(mutation_cnt):
@@ -311,8 +311,8 @@ class RTPSPacket:
             self.w_prefix, self.w_eid = wg[:12], wg[12:16]
             self.r_prefix, self.r_eid = rg[:12], rg[12:16]
 
-        except (json.JSONDecodeError, KeyError) as e:
-            raise RuntimeError(f"Invalid inspect_info format: {e}") from e
+        except Exception as e:
+            raise OSError(f"Invalid inspect_info format: {e}") from e
 
 
         self.hdr  = self._build_header(rmw_impl)

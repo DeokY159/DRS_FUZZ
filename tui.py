@@ -17,7 +17,6 @@ LOGS_DIR   = os.path.join(OUTPUT_DIR, 'logs')
 STATE_LOG  = os.path.join(LOGS_DIR, 'current_state.log')
 
 # ----- Helpers -----
-
 def tail(path: str, n: int = 10) -> str:
     try:
         with open(path, 'r', errors='ignore') as f:
@@ -63,8 +62,7 @@ def format_elapsed_time(start_time, now=None):
         return f"{days}d {hours:02}:{minutes:02}:{seconds:02}"
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
-# ----- Log Parsing -----
-
+# ----- Log Parsing ----
 def parse_state_log():
     state = {
         'version': None,
@@ -107,7 +105,6 @@ def parse_state_log():
                             k, v = pair.strip().split('=', 1)
                             state['config'][k.strip()] = v.strip()
                 elif msg.startswith('QoS Setting'):
-                    # Example: 'QoS Setting durability=VOLATILE, history=KEEP_LAST, depth=10, liveliness=AUTOMATIC'
                     profile_part = msg[len('QoS Setting'):].strip()
                     for pair in profile_part.split(','):
                         if '=' in pair:
@@ -168,7 +165,6 @@ def get_latest_seed_selected():
     return None
 
 # ----- Panels -----
-
 def build_settings_panel(state):
     t = Table.grid(padding=(0,1))
     t.add_column(justify="right", style="cyan", width=20)
@@ -256,7 +252,6 @@ def build_mutated_packets_panel(paths):
     return Panel(grid, title="Mutated Packets", border_style="blue")
 
 # ----- Layout -----
-
 def create_layout():
     state = parse_state_log()
     mutated_packet_paths = get_mutated_packet_paths()
@@ -270,16 +265,16 @@ def create_layout():
         Layout(name="left", ratio=1),
         Layout(name="right", ratio=1),
     )
-    # 왼쪽: process, results, strategy, mutated
+    # left: process, results, strategy, mutated
     layout["left"].split_column(
-        Layout(name="proc", size=5),           # Process (Elapsed Time 등)
+        Layout(name="proc", size=5),           # Process
         Layout(name="results", size=5),        # Overall Results
         Layout(name="strategy", size=8),       # Current Strategy
         Layout(name="mainlog", ratio=1)        # Main Log
     )
-    # 오른쪽: settings, weights, mutated
+    # right: settings, weights, mutated
     layout["right"].split_column(
-        Layout(name="settings", size=10),      # Settings (상수/초기설정)
+        Layout(name="settings", size=10),      # Settings 
         Layout(name="weights", size=8),        # Strategy Weights
         Layout(name="mutated", ratio=1)        # Mutated Packets
     )
@@ -289,7 +284,7 @@ def create_layout():
     layout["left"]["strategy"].update(build_strategy_panel(state))
     mainlog_panel = build_main_log_panel()
     layout["left"]["mainlog"].update(mainlog_panel)
-    # 오른쪽 상단: settings (상수/설정들만)
+    # right-up: settings
     layout["right"]["settings"].update(build_settings_panel(state))
     layout["right"]["weights"].update(build_strategy_weights_panel(state))
     mutated_panel = build_mutated_packets_panel(mutated_packet_paths)

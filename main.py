@@ -1,6 +1,8 @@
 # main.py
 import shutil
+import subprocess
 from pathlib import Path
+from core.ui import info, error, warn, done
 
 output_dir = Path(__file__).resolve().parent / 'output'
 if output_dir.exists():
@@ -40,14 +42,18 @@ if __name__ == "__main__":
     banner()
     interface = Interface()
     builder = Builder()
-    builder.build_docker(interface.version, interface.robot,
-                         headless=interface.headless, asan=interface.asan)
-    while True:
-        fuzzer = Fuzzer(
-            version=interface.version,
-            robot=interface.robot,
-            topic_name=interface.topic,
-            headless=interface.headless,
-            asan=interface.asan
-        )
-        fuzzer.run()
+    
+    try:
+        builder.build_docker(interface.version, interface.robot,headless=interface.headless, asan=interface.asan)
+    except (OSError, subprocess.SubprocessError) as e:
+        error(f"Builder failed: {e}")
+        exit(0)
+    
+    fuzzer = Fuzzer(
+        version=interface.version,
+        robot=interface.robot,
+        topic_name=interface.topic,
+        headless=interface.headless,
+        asan=interface.asan
+    )
+    fuzzer.run()

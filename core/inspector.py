@@ -4,7 +4,6 @@ import json
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy, QoSDurabilityPolicy
 from core.ui import debug
 
-# 토픽 이름별 메시지 타입 매핑
 TYPE_MAP = {
     '/cmd_vel': 'geometry_msgs/msg/Twist',  # humble
     #'/cmd_vel': 'geometry_msgs/msg/TwistStamped', # Jazzy
@@ -58,9 +57,7 @@ def create_publisher(topic_name: str,
                      qos_profile: QoSProfile = None,
                     ) -> None:
     """
-    컨테이너 안에서 ros2 topic pub CLI 로 퍼블리셔를 올립니다.
-    --rate 으로 빈 메시지를 지정된 빈도로 퍼블리시하여
-    DDS participant (과거 create_publisher)와 동등한 역할을 수행하게 합니다.
+    Make DDS participant in inspector container for getting topic info
     """
     msg_type = TYPE_MAP.get(topic_name)
     if msg_type is None:
@@ -88,32 +85,35 @@ def create_publisher(topic_name: str,
 
     base = f"ros2 topic pub {topic_name} {msg_type} '{{}}' --rate 0.01"
     cmd  = base + ' ' + ' '.join(flags)
-    subprocess.run(['docker','exec','-d', 
-                    '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
-                    '-e', f"ROS_DOMAIN_ID={domain_id}",
-                    container,'bash','-ic', cmd], check=True)
+    try:
+        subprocess.run(['docker','exec','-d', 
+                        '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
+                        '-e', f"ROS_DOMAIN_ID={domain_id}",
+                        container,'bash','-ic', cmd], check=True)
+    except Exception as e:
+        raise subprocess.SubprocessError(f"Failed to create publisher: {e}")
     
-
-
 def get_topic_info(topic_name: str,
                    container: str,
                    rmw_impl: str,
                    domain_id: str,
                    **dump_kwargs) -> str:
     """
-    ros2 topic info --verbose 를 호출해서 GID 등을 파싱합니다.
-    퍼블리셔는 내리지 않습니다.
+    Called `ros2 topic info --verbose` for getting "GID"
     """
     cmd = f"ros2 topic info {topic_name} --verbose"
 
-    proc = subprocess.run([
-        'docker', 'exec',
-        '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
-        '-e', f"ROS_DOMAIN_ID={domain_id}",
-        container, 'bash', '-ic', cmd
-    ], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        proc = subprocess.run([
+            'docker', 'exec',
+            '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
+            '-e', f"ROS_DOMAIN_ID={domain_id}",
+            container, 'bash', '-ic', cmd
+        ], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception as e:
+        raise subprocess.SubprocessError(f"Failed to get topic info: {e}")
     
-    # parse
+    # Parse topic info
     blocks = proc.stdout.strip().split("\n\n")
     pub, sub = {}, {}
     for blk in blocks:

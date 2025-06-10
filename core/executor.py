@@ -36,8 +36,7 @@ class FuzzContainer:
         if asan: parts.append("asan")
         self.image_tag     = "_".join(parts)
         self.log_procs: list[tuple[Popen, any]] = []
-
-        # Inspector 전용 컨테이너 정보
+        # Inspector container infomation
         self.domain_map     = {}    # rmw_impl → domain_id
         self.inspector_name = INSPECTOR_CNAME
         self.inspector_ip   = inspector_ip
@@ -46,7 +45,7 @@ class FuzzContainer:
         try:
             subprocess.run(['docker', 'exec', container] + cmd, check=True)
             info(f"Executed in container '{container}': {' '.join(cmd)}")
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             raise subprocess.CalledProcessError(f"Failed to exec in '{container}': {e}")
 
     def _wait_for_log(self, container: str, pattern: str, timeout: float = 90.0) -> None:
@@ -65,8 +64,11 @@ class FuzzContainer:
 
     def run_docker(self) -> None:
         info("Granting X server access: xhost +local:root")
-        subprocess.run(['xhost', '+local:root'], check=True)
-
+        try:
+            subprocess.run(['xhost', '+local:root'], check=True)
+        except Exception as e:
+            raise OSError(f"xhost command failed: {e}")
+        
         # ensure output/logs dir
         logs_dir = os.path.join(os.getcwd(), 'output', 'logs')
         dds_api_dir = os.path.join(logs_dir, 'dds_api')
@@ -83,28 +85,33 @@ class FuzzContainer:
             network_id = result.stdout.strip()
             done(f"Docker network '{self.network_name}' already exists.")
         else:
-            result = subprocess.run([
-                'docker', 'network', 'create',
-                '--driver', 'bridge', f'--subnet={self.subnet}', self.network_name
-            ], capture_output=True, text=True, check=True)
-            network_id = result.stdout.strip()
-            done(f"Created docker network '{self.network_name}'.")
+            try:
+                result = subprocess.run([
+                    'docker', 'network', 'create',
+                    '--driver', 'bridge', f'--subnet={self.subnet}', self.network_name
+                ], capture_output=True, text=True, check=True)
+                network_id = result.stdout.strip()
+                done(f"Created docker network '{self.network_name}'.")
+            except Exception as e:
+                raise subprocess.SubprocessError(f"Failed to create docker network: {e}")
 
         self.network_iface = f"br-{network_id[:12]}"
         debug(f"Docker network 'name:{self.network_name}','id:{self.network_iface}'")
 
-
-        # 1) Inspector 전용 컨테이너 (토픽 info 전용)
+        # 1) Start inspector container
         info(f"Starting inspector container '{self.inspector_name}' on '{self.network_name}'")
-        subprocess.run([
-            'docker','run','--rm','-d',
-            '--net', self.network_name, '--ip', self.inspector_ip,
-            '--name', self.inspector_name, self.image_tag,
-            '-c', 'tail -f /dev/null'
-        ], check=True)
+        try:
+            subprocess.run([
+                'docker','run','--rm','-d',
+                '--net', self.network_name, '--ip', self.inspector_ip,
+                '--name', self.inspector_name, self.image_tag,
+                '-c', 'tail -f /dev/null'
+            ], check=True)
+        except Exception as e:
+            raise subprocess.SubprocessError(f"Failed to start inspector container: {e}")
         time.sleep(TIME_DELAY)
 
-        # 2) RMW별 본 컨테이너 (Gazebo + robot spawn)
+        # 2) Start RMW Container (Gazebo + robot spawn)
         for rmw_impl, dds_ip in self.dds_map.items():
             cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Starting container '{cname}' on '{self.network_name}'")
@@ -115,7 +122,7 @@ class FuzzContainer:
                     '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
                     '-e', f"ROS_DOMAIN_ID={self.dds_domain[rmw_impl]}",
                     '-v','/tmp/.X11-unix:/tmp/.X11-unix',
-                    '-v',f'{logs_dir}/dds_api:/tmp/DRSFuzz',
+                    '-v',f'{logs_dir}/dds_api:/tmp/DRSFuzz', # For DDS API
                     '--net', self.network_name, '--ip', dds_ip,
                     '--cpus', DOCKER_CPU_CORES,
                     '--memory', DOCKER_MEMORY,
@@ -133,34 +140,34 @@ class FuzzContainer:
                 self.log_procs.append((proc, lf))
 
                 info(f"Container '{cname}' started and logging to {log_path}")
-            except subprocess.CalledProcessError as e:
-                error(f"Failed to start '{cname}': {e}")
+            except Exception as e:
+                raise subprocess.CalledProcessError(f"Failed to start '{cname}': {e}")
             
 
     def run_gazebo(self) -> None:
-        #launch = "turtlebot3_world.headless.launch.py" if self.headless else "turtlebot3_world.launch.py" # old version
         launch = "empty_world.headless.launch.py" if self.headless else "empty_world.launch.py"
         for rmw_impl in self.dds_map:
             cname = f"{self.version}_{self.robot}_{rmw_impl}"
             info(f"Launching Gazebo in '{cname}'")
-            subprocess.run([
-                'docker','exec','-d', 
-                # for cyclonedds port
-                '-e', "CYCLONEDDS_URI=<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex></Discovery></Domain></CycloneDDS>", 
-                cname, 'bash','-ic',
-                f'ros2 launch turtlebot3_gazebo {launch} '
-                f'> /proc/1/fd/1 2>/proc/1/fd/2 &'
-            ], check=True)
-            self._wait_for_log(cname, r'process has finished cleanly')
-            time.sleep(TIME_DELAY)
-            done(f"Gazebo up in '{cname}'")
-            self.delete_robot(rmw_impl)
+            try:
+                subprocess.run([
+                    'docker','exec','-d', 
+                    '-e', "CYCLONEDDS_URI=<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex></Discovery></Domain></CycloneDDS>", 
+                    cname, 'bash','-ic',
+                    f'ros2 launch turtlebot3_gazebo {launch} '
+                    f'> /proc/1/fd/1 2>/proc/1/fd/2 &'
+                ], check=True)
+                self._wait_for_log(cname, r'process has finished cleanly')
+                time.sleep(TIME_DELAY)
+                done(f"Gazebo up in '{cname}'")
+                self.delete_robot(rmw_impl)
+            except Exception as e:
+                raise subprocess.SubprocessError(f"Failed to launch Gazebo: {e}")
 
 
     def spawn_robot(self, rmw_impl: str) -> None:
         if self.robot not in self.ROBOT_MODELS:
-            error(f"Unsupported robot: '{self.robot}'")
-            sys.exit(1)
+            raise Exception(f"Unsupported robot: '{self.robot}'")
         cname = f"{self.version}_{self.robot}_{rmw_impl}"
         info(f"Spawning robot in '{cname}' (detached).")
         sdf = (
@@ -174,10 +181,13 @@ class FuzzContainer:
             f"-file {sdf} -x 0.5 -y 0.5 -z 0.01 "
             "> /proc/1/fd/1 2>/proc/1/fd/2 &"
         )
-        subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
-        self._wait_for_log(cname, r'process has finished cleanly')
-        time.sleep(TIME_DELAY)
-        done(f"Robot spawned in '{cname}'")
+        try:
+            subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
+            self._wait_for_log(cname, r'process has finished cleanly')
+            time.sleep(TIME_DELAY)
+            done(f"Robot spawned in '{cname}'")
+        except Exception as e:
+            raise subprocess.SubprocessError(f"Failed to spawn robot: {e}")
 
     def delete_robot(self, rmw_impl: str) -> None:
         cname = f"{self.version}_{self.robot}_{rmw_impl}"
@@ -188,10 +198,13 @@ class FuzzContainer:
             "gazebo_msgs/srv/DeleteEntity "
             f"\"{args}\" > /proc/1/fd/1 2>/proc/1/fd/2 &"
         )
-        subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
-        self._wait_for_log(cname, r'Successfully deleted entity')
-        time.sleep(TIME_DELAY)
-        done(f"Robot deleted in '{cname}'")
+        try:
+            subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
+            self._wait_for_log(cname, r'Successfully deleted entity')
+            time.sleep(TIME_DELAY)
+            done(f"Robot deleted in '{cname}'")
+        except Exception as e:
+            error(f"Failed to delete robot in '{cname}': {e}")
 
     def close_docker(self) -> None:
         # stop capturing logs
@@ -211,10 +224,6 @@ class FuzzContainer:
 
 
 class RobotStateMonitor:
-    """
-    drs_inspector 컨테이너 내부에서 ros2 topic echo를 실행해
-    imu, odom, scan 로그를 수집하고, 기존 파싱/PKL 변환 로직을 그대로 사용합니다.
-    """
     WATCHLIST = {
         "turtlebot3": ["imu", "odom", "scan"]
     }
@@ -228,7 +237,7 @@ class RobotStateMonitor:
         os.makedirs(log_dir, exist_ok=True)
 
         for topic in self.targets:
-            # 컨테이너 내부에서 ros2 topic echo 호출
+            # Call `ros2 topic echo`
             cmd = (
                 f"ros2 topic echo /{topic} --once"
             )
@@ -251,19 +260,15 @@ class RobotStateMonitor:
                     )
                     try:
                         proc.wait(timeout=30)
-                    except subprocess.TimeoutExpired as e:
+                    except Exception as e:
                         proc.kill()
                         proc.wait()
-                        raise RuntimeError(
-                            f"Topic '{topic}' echo timed out: {e}"
-                        )
+                        raise TimeoutError(f"Topic '{topic}' echo timed out: {e}")
 
                 if proc.returncode != 0:
-                    raise RuntimeError(
-                        f"Topic '{topic}' echo failed (code {proc.returncode})"
-                    )
+                    raise subprocess.SubprocessError(f"Topic '{topic}' echo failed (code {proc.returncode})")
 
                 info(f"Robot State(/{topic}) log saved to '{log_path}'")
 
-            except OSError as e:
-                raise RuntimeError(f"Cannot write to '{log_path}': {e}")
+            except Exception as e:
+                raise OSError(f"Cannot write to '{log_path}': {e}")
