@@ -268,7 +268,7 @@ class Fuzzer:
                 # Save crash logs and restart
                 self.copy_logs(type="crash")
                 self.container.close_docker()
-                feedback.adjust_mutation_weights(self.robot, self.RTPSPacket, self.DDSConfig, 0.5, True)
+                feedback.increase_mutation_weights(self.RTPSPacket, self.DDSConfig, 0.5)
                 raise RuntimeError("Restart container after crash ...")
 
     def gen_packet_sender(self, rmw_impl: str, mutated_payloads: list[bytes]) -> None:
@@ -327,8 +327,6 @@ class Fuzzer:
                 self.round = 1
                 while True:
                     # rotate QoS and increment stage
-                    behavior_oracle=False
-                    listener_oracle=False
                     detected_bug=False
 
                     if (self.round - 1) % PACKETS_PER_QOS == 0:
@@ -369,21 +367,26 @@ class Fuzzer:
                         self.check_asan_crash()
                         time.sleep(RUN_DELAY)
 
-                    behavior_oracle=oracle.check_robot_states_diff(robot=self.robot, threshold=30.0)
                     fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
                     cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
 
                     events_fast = oracle.listener_parser(fast_log)
                     events_cyclone = oracle.listener_parser(cyclone_log)
-
-                    listener_oracle=oracle.compare_listener(events_fast, events_cyclone, self.topic_name)
                     
-                    if behavior_oracle or listener_oracle:
-                        self.copy_logs(self, "sementic_bug")
-                        self.bug_count += 1
+                    if oracle.check_robot_states_diff(robot=self.robot, threshold=30.0):
+                        feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
                         detected_bug = True
 
-                    feedback.adjust_mutation_weights(self.robot, self.RTPSPacket, self.DDSConfig, 0.5, detected_bug)
+                    #if oracle.compare_listener(events_fast, events_cyclone, self.topic_name):
+                    #    feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
+                    #    detected_bug = True
+
+                    if detected_bug:
+                        self.copy_logs(self, "sementic_bug")
+                        self.bug_count += 1
+
+                    if feedback.is_robot_stationary(self.robot):
+                        feedback.decrease_mutation_weights(self.rtps, self.dds_config, 0.5)
 
                     self.round += 1
                     

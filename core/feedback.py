@@ -68,9 +68,3 @@ def decrease_mutation_weights(rtps: RTPSPacket, dds_config: DDSConfig, increment
 
                 info(f'Mutation weight increased to {comb["weight"]:.2f} for QoSProfile ({qos_desc})')
                 break
-
-def adjust_mutation_weights(robot: str, rtps: RTPSPacket, dds_config: DDSConfig, increment: float, crash_or_bug: bool):
-    if(is_robot_stationary(robot)):
-        decrease_mutation_weights(rtps = RTPSPacket, dds_config = DDSConfig, increment = increment)
-    if(crash_or_bug):
-        increase_mutation_weights(rtps = RTPSPacket, dds_config = DDSConfig, increment = increment)
