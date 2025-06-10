@@ -329,6 +329,13 @@ class Fuzzer:
                     # rotate QoS and increment stage
                     detected_bug=False
 
+                    fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
+                    cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
+                    with open(fast_log, 'w') as f:
+                        f.write("")
+                    with open(cyclone_log, 'w') as f:
+                        f.write("")                       
+    
                     if (self.round - 1) % PACKETS_PER_QOS == 0:
                         self.dds_config.update_qos()
                         info(f"==> Stage {self.stage}: QoS settings updated")
@@ -367,22 +374,16 @@ class Fuzzer:
                         self.check_asan_crash()
                         time.sleep(RUN_DELAY)
 
-                    fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
-                    cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
-
-                    events_fast = oracle.listener_parser(fast_log)
-                    events_cyclone = oracle.listener_parser(cyclone_log)
-                    
                     if oracle.check_robot_states_diff(robot=self.robot, threshold=30.0):
                         feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
                         detected_bug = True
 
-                    #if oracle.compare_listener(events_fast, events_cyclone, self.topic_name):
-                    #    feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
-                    #    detected_bug = True
+                    if oracle.compare_listener(fast_log, cyclone_log, self.topic_name):
+                        feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
+                        detected_bug = True
 
                     if detected_bug:
-                        self.copy_logs(self, "sementic_bug")
+                        self.copy_logs("semantic_bug")
                         self.bug_count += 1
 
                     if feedback.is_robot_stationary(self.robot):

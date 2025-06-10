@@ -1,5 +1,9 @@
 # core/oracle.py
 import yaml
+import re
+from datetime import datetime, timezone
+from typing import List, Dict, Any
+import os
 from core.ui import info, error, debug
 
 def parse_imu_from_log(log_path: str) -> dict:
@@ -149,3 +153,118 @@ def check_robot_states_diff(robot: str, threshold: float = 30.0) -> bool:
                             return True
 
         return False
+
+def listener_parser(file_path: str):
+    events = []
+    with open(file_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = re.split(r'[ \t]+', line)
+            if len(parts) < 4:
+                parts += [""] * (4 - len(parts))
+            time_str1, time_str2, event_type, entity = parts[:4]
+            time_str = f"{time_str1} {time_str2}"
+            event_type = event_type.rstrip(",")
+            
+            # 1) Parse timestamp
+            try:
+                if time_str.endswith("Z"):
+                    ts = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                else:
+                    ts = datetime.fromisoformat(time_str)
+            except ValueError:
+                ts = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+
+            # 2) Determine if the fourth column is numeric
+            events.append({"timestamp": ts, "event": event_type, "entity": entity})
+    return events
+
+def compare_listener(file_path_a: list, file_path_b: list, topic: str):
+    
+    events_fast = listener_parser(file_path_a)
+    events_cyclone = listener_parser(file_path_b)
+    mapping = {
+        "data_available": "DATA_AVAILABLE",
+        "subscription_matched": "SUBSCRIPTION_MATCHED",
+        "requested_deadline_missed": "REQUESTED_DEADLINE_MISSED",
+        "liveliness_lost": "LIVELINESS_LOST",
+        "requested_incompatible_qos": "REQUESTED_INCOMPATIBLE_QOS",
+        "sample_lost": "SAMPLE_LOST",
+    }
+
+    # Log Abstracting for Classification
+    def abstract(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for ev in events:
+            if ev["event"] == "data_available":
+                if topic not in ev["entity"]:
+                    continue
+            abs_type = mapping.get(ev["event"])
+            if not abs_type:
+                continue
+            out.append({"timestamp": ev["timestamp"], "type": abs_type})
+        return sorted(out, key=lambda e: e["timestamp"])
+
+    seq_fast = abstract(events_fast)
+    seq_cyclone = abstract(events_cyclone)
+
+    # analyze events call or counts
+    def analyze(seq: List[Dict[str, Any]]) -> Dict[str, Any]:
+        data_events = [e for e in seq if e["type"] == "DATA_AVAILABLE"]
+        if len(data_events) >= 10:
+            cutoff = data_events[9]["timestamp"]
+        elif data_events:
+            cutoff = data_events[0]["timestamp"]
+        else:
+            cutoff = datetime.max.replace(tzinfo=timezone.utc)
+
+        pre_matched = 0
+        pre_others = set()
+        post_matched = 0
+        post_others = set()
+
+        for ev in seq:
+            t = ev["timestamp"]
+            et = ev["type"]
+
+            # SUBSCRIPTION_MATCHED Count
+            if et == "SUBSCRIPTION_MATCHED":
+                if t <= cutoff:
+                    pre_matched += 1
+                elif t > cutoff:
+                    post_matched += 1
+
+            # Other Events count
+            else:
+                if t <= cutoff:
+                    pre_others.add(et)
+                elif t > cutoff:
+                    post_others.add(et)
+
+        return {
+            "pre_matched_cnt": pre_matched,
+            "pre_others": sorted(pre_others),
+            "data_cnt": len(data_events),
+            "post_matched_cnt": post_matched,
+            "post_others": sorted(post_others),
+        }
+
+    stats_fast = analyze(seq_fast)
+    stats_cyclone = analyze(seq_cyclone)
+
+    # compare
+    for key in (
+        "pre_matched_cnt",
+        "pre_others",
+        "data_cnt",
+        "post_matched_cnt",
+        "post_others",
+    ):
+        if key=="data_cnt": ## Data Packet Implementation Difference
+            stats_fast[key] != stats_cyclone[key]-1:
+            return True
+        if stats_fast[key] != stats_cyclone[key]:
+            return True
+    return False

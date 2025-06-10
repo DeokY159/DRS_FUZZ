@@ -204,7 +204,7 @@ class FuzzContainer:
             time.sleep(TIME_DELAY)
             done(f"Robot deleted in '{cname}'")
         except Exception as e:
-            error(f"Failed to delete robot in '{cname}': {e}")
+            raise subprocess.SubprocessError(f"Failed to delete robot in '{cname}': {e}")
 
     def close_docker(self) -> None:
         # stop capturing logs
