@@ -1,9 +1,5 @@
 # DRS_FUZZ
-<<<<<<< HEAD
-![alt text](<DRSFuzz Architecture.png>)
-=======
 ![DRSFuzz Architecture](https://github.com/user-attachments/assets/6e20b3f1-877f-4426-8c47-965baf2b3bcf)
->>>>>>> 08ebef3612791194fbf7d9178bc6e170cd482778
 **DRS_FUZZ** is a Python-based fuzzer for vulnerability discovery in ROS 2 robotic systems. 
 Developed by Team **OOGWAY** for the 2025-1 Capstone Design course in Information Security at Sejong University, 
 it targets common ROS 2 communication channels and injects mutated RTPS packets to uncover weaknesses.
@@ -71,19 +67,12 @@ python3 main.py humble turtlebot3 --headless --asan
 
 ## 🖥️ UI/UX
 ### CLI Interface
-<<<<<<< HEAD
-![alt text](image-3.png)
-
-### TUI Interface
-![alt text](image-2.png)
-=======
 ![image1](https://github.com/user-attachments/assets/14f63906-4976-4e1d-9506-7b7a62ff9be6)
 
 
 ### TUI Interface
 ![image2](https://github.com/user-attachments/assets/04df827b-2ea0-4389-bf48-7e060eb8f1f7)
 
->>>>>>> 08ebef3612791194fbf7d9178bc6e170cd482778
 
 ## 💡 More Options
 - DRS_FUZZ can be easily adapted to test different robots: simply adjust the necessary modules or scripts to fit the target robot, and reuse the core framework.
@@ -92,8 +81,4 @@ python3 main.py humble turtlebot3 --headless --asan
 
 - You can also set different DDS implementations for the subscriber and publisher containers, allowing cross-DDS fuzzing and analysis.
 
-<<<<<<< HEAD
 - **For specific setup changes and advanced configurations, please refer to the TODO comments within the code.**
-=======
-- **For specific setup changes and advanced configurations, please refer to the TODO comments within the code.**
->>>>>>> 08ebef3612791194fbf7d9178bc6e170cd482778
