@@ -276,9 +276,6 @@ class Fuzzer:
 
     def gen_packet_sender(self, rmw_impl: str, mutated_payloads: list[bytes]) -> None:
         """Instantiate and run the FuzzPublisher node once."""
-        os.environ["RMW_IMPLEMENTATION"] = rmw_impl
-        #os.environ["RMW_IMPLEMENTATION"] = "rmw_fastrtps_cpp" # cross test
-        os.environ["ROS_DOMAIN_ID"]      = self.DOMAIN_ID_MAP[rmw_impl]
         if not rclpy.ok():
             rclpy.init()
         self.run_count += 1
@@ -306,6 +303,8 @@ class Fuzzer:
             rclpy.spin_until_future_complete(node, node.future)
         except RuntimeError as e:
             raise RuntimeError(f"FuzzPublisher runtime error: {e}")
+        except TimeoutError as e:
+            raise TimeoutError(f"FuzzPublisher timeout error: {e}")
         except (OSError, subprocess.SubprocessError) as e:
             raise subprocess.SubprocessError(f"FuzzPublisher subprocess error: {e}")
         finally:
@@ -328,7 +327,6 @@ class Fuzzer:
                 self.round = 1
                 while True:
                     # rotate QoS and increment stage
-
                     fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
                     cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
                     with open(fast_log, 'w') as f:

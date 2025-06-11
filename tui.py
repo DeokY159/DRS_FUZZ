@@ -186,7 +186,7 @@ def build_process_time_panel(state, start_time):
     t.add_column()
     t.add_row("Elapsed Time", format_elapsed_time(start_time))
     t.add_row("Total Stage", str(state.get('stage', 0)))
-    t.add_row("Total Round", str(state.get('round', 0)))
+    t.add_row("Current Round", str(state.get('round', 0)))
     return Panel(t, title="Process", border_style="cyan")
 
 def build_header_panel(state):

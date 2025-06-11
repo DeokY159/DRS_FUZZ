@@ -51,17 +51,20 @@ class FuzzContainer:
     def _wait_for_log(self,container: str, pattern: str, timeout: float = TIME_OUT, interval: int = TIME_DELAY) -> bool:
         debug(f"Waiting for log pattern '{pattern}' in '{container}'")
         start = time.time()
-        while time.time() - start < timeout:            
-            result = subprocess.run(
-                ['docker', 'logs', '--tail', '10', container],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
-            lines = result.stdout.splitlines()
-            for line in lines:
-                if re.search(pattern, line):
-                    return True
-            time.sleep(interval)
-        raise TimeoutError(f"{container}")
+        try:
+            while time.time() - start < timeout:            
+                result = subprocess.run(
+                    ['docker', 'logs', '--tail', '10', container],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                lines = result.stdout.splitlines()
+                for line in lines:
+                    if re.search(pattern, line):
+                        return True
+                time.sleep(interval)
+        except Exception as e:
+            input()
+            raise TimeoutError(f"{container}")
 
     def run_docker(self) -> None:
         info("Granting X server access: xhost +local:root")
@@ -168,6 +171,7 @@ class FuzzContainer:
                     f'ros2 launch turtlebot3_gazebo {launch} '
                     f'> /proc/1/fd/1 2>/proc/1/fd/2 &'
                 ], check=True)
+                time.sleep(TIME_DELAY)
                 self._wait_for_log(cname, r'process has finished cleanly')
                 time.sleep(TIME_DELAY)
                 done(f"Gazebo up in '{cname}'")
@@ -196,7 +200,7 @@ class FuzzContainer:
         )
         try:
             subprocess.run(['docker','exec','-d', cname, 'bash','-ic', cmd], check=True)
-            self._wait_for_log(cname, r'process has finished cleanly')
+            self._wait_for_log(cname, r'Successfully spawned entity')
             done(f"Robot spawned in '{cname}'")
             time.sleep(TIME_DELAY)
         except TimeoutError as e:
