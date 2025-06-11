@@ -222,8 +222,8 @@ class Reproducer:
                 error(f"ASAN detected in container {cname}")
                 self.validation += 1
                 info(f"Crash validated for Validation #{self.run}")
-                self.container.close_docker()
                 raise RuntimeError("Restart container after crash ...")
+
 
     def get_qos_profile(self):
         qos_file = os.path.join(self.saved_log_path, 'qos.txt')

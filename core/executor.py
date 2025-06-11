@@ -117,8 +117,8 @@ class FuzzContainer:
                 ### (e.g. fuzzer_<ROS_DISTRO_turtlebot3>)
                 ### Default: self.image_tag
 
-                self.image_tag,
-                #'fuzzer_jazzy_turtlebot3',
+                #self.image_tag,
+                'fuzzer_jazzy_turtlebot3',
                 '-c', 'tail -f /dev/null'
             ], check=True)
         except Exception as e:

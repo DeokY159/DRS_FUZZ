@@ -270,8 +270,8 @@ class Fuzzer:
                 error(f"ASAN detected in container {cname}")
                 # Save crash logs and restart
                 self.copy_logs(type="crash")
-                self.container.close_docker()
-                feedback.increase_mutation_weights(self.RTPSPacket, self.DDSConfig, 0.5)
+                if self.rtps and self.dds_config:
+                    feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
                 raise RuntimeError("Restart container after crash ...")
 
     def gen_packet_sender(self, rmw_impl: str, mutated_payloads: list[bytes]) -> None:
@@ -302,10 +302,13 @@ class Fuzzer:
             )
             rclpy.spin_until_future_complete(node, node.future)
         except RuntimeError as e:
+            self.check_asan_crash()
             raise RuntimeError(f"FuzzPublisher runtime error: {e}")
         except TimeoutError as e:
+            self.check_asan_crash()
             raise TimeoutError(f"FuzzPublisher timeout error: {e}")
         except (OSError, subprocess.SubprocessError) as e:
+            self.check_asan_crash()
             raise subprocess.SubprocessError(f"FuzzPublisher subprocess error: {e}")
         finally:
             if node:
