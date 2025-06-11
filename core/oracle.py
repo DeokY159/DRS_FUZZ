@@ -164,7 +164,7 @@ def check_robot_states_diff(robot: str, threshold: float = 30.0) -> bool:
                             error(f"Invalid value in {section}.log(rmw_fastrtps_cpp): \"{key}: {x}, {{max: {scan_range_max}, min: {scan_range_min}}}\"")
                             return True
                             
-                        if fy < scan_range_min or fy > scan_range_min:
+                        if fy < scan_range_min or fy > scan_range_max:
                             error(f"Invalid value in {section}.log(rmw_cyclonedds_cpp): \"{key}: {y}, {{max: {scan_range_max}, min: {scan_range_min}}}\"")
                             return True
 
