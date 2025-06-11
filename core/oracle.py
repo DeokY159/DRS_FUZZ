@@ -156,7 +156,7 @@ def check_robot_states_diff(robot: str, threshold: float = 30.0) -> bool:
                         try:
                             fx = float(x)
                             fy = float(y)
-                            if fx < scan_range_min or fx > scan_rage_max or fy < scan_range_min or fy > scan_range_max:
+                            if fx < scan_range_min or fx > scan_range_max or fy < scan_range_min or fy > scan_range_max:
                                 error(f"Invalid value in {section}.log: \"{key}: {x}, {y}\"")
                                 return True
                             if abs(fx - fy) > threshold:
