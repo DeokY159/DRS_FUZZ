@@ -10,46 +10,6 @@ TYPE_MAP = {
     '/chatter': 'std_msgs/msg/String',
 }
 
-def parse_topic_info(raw_output: str) -> tuple[dict, dict]:
-    """
-    Parse the verbose output of `ros2 topic info` into publisher and subscriber dicts.
-
-    :param raw_output: Raw CLI output string
-    :return: (publisher_dict, subscriber_dict)
-    """
-    blocks = raw_output.strip().split("\n\n")
-    publisher = {}
-    subscriber = {}
-
-    for block in blocks:
-        lines = block.strip().splitlines()
-        entry = {}
-        for line in lines:
-            if line.startswith("Node name:"):
-                entry["node_name"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Node namespace:"):
-                entry["namespace"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Topic type:"):
-                entry["topic_type"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Endpoint type:"):
-                entry["endpoint_type"] = line.split(":", 1)[1].strip()
-            elif line.startswith("GID:"):
-                entry["gid"] = line.split(":", 1)[1].strip()
-            elif line.strip().startswith("Reliability:"):
-                entry["reliability"] = line.split(":", 1)[1].strip()
-            elif line.strip().startswith("History"):
-                entry["history"] = line.split(":", 1)[1].strip()
-            elif line.strip().startswith("Durability:"):
-                entry["durability"] = line.split(":", 1)[1].strip()
-
-        n_name = entry.get("node_name", "") 
-        e_type = entry.get("endpoint_type", "")
-        if e_type == "PUBLISHER" and not n_name.startswith("_"):
-            publisher = entry
-        elif e_type in "SUBSCRIPTION" and not n_name.startswith("_"):
-            subscriber = entry
-    return publisher, subscriber
-
 def create_publisher(topic_name: str,
                      container: str,
                      rmw_impl: str,
