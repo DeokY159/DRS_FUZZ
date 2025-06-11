@@ -49,10 +49,6 @@ class FuzzContainer:
             raise subprocess.CalledProcessError(f"Failed to exec in '{container}': {e}")
 
     def _wait_for_log(self,container: str, pattern: str, timeout: float = TIME_OUT, interval: int = TIME_DELAY) -> bool:
-        """
-        timeout 동안 interval마다 docker logs --tail 10로 패턴을 찾아보고,
-        있으면 True, 없으면 False
-        """
         debug(f"Waiting for log pattern '{pattern}' in '{container}'")
         start = time.time()
         while time.time() - start < timeout:            
@@ -65,7 +61,7 @@ class FuzzContainer:
                 if re.search(pattern, line):
                     return True
             time.sleep(interval)
-        raise TimeoutError(f"Timeout to delete robot in {container}")
+        raise TimeoutError(f"{container}")
 
     def run_docker(self) -> None:
         info("Granting X server access: xhost +local:root")
@@ -177,10 +173,9 @@ class FuzzContainer:
                 done(f"Gazebo up in '{cname}'")
                 self.delete_robot(rmw_impl)
             except TimeoutError as e:
-                raise TimeoutError(f"Time to launch Gazebo: {e}")
-
+                raise TimeoutError(f"Time to launch Gazebo in {e}")
             except Exception as e:
-                raise subprocess.SubprocessError(f"Failed to launch Gazebo: {e}")
+                raise subprocess.SubprocessError(f"Failed to launch Gazebo in {e}")
 
 
     def spawn_robot(self, rmw_impl: str) -> None:
