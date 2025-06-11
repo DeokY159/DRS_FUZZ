@@ -83,13 +83,9 @@ def parse_scan_from_log(log_path: str) -> dict:
         try:
             data = yaml.safe_load(block)
             scan = {
-                'angle_min': data['angle_min'],
-                'angle_max': data['angle_max'],
-                'angle_increment': data['angle_increment'],
                 'range_min': data['range_min'],
                 'range_max': data['range_max'],
                 'ranges': data['ranges'],
-                'intensities': data['intensities'],
             }
             return scan
         except Exception as e:
@@ -125,11 +121,22 @@ def check_robot_states_diff(robot: str, threshold: float = 30.0) -> bool:
     cyclone = robot_states.get('rmw_cyclonedds_cpp', {})
 
     if robot == 'turtlebot3':
+        scan_range_min = 0.0
+        scan_range_max = 0.0
         for section in ['imu', 'odom', 'scan']:
             data_fast = fast.get(section, {})
             data_cycl = cyclone.get(section, {})
 
             for key in data_fast:
+                if section == "scan":
+                    if key == "range_min":
+                        scan_range_min = data_fast.get(key)
+                        continue
+
+                    elif key =="range_max":
+                        scan_range_max = data_fast.get(key)
+                        continue
+
                 a = data_fast.get(key)
                 b = data_cycl.get(key)
                 if type(a) != type(b):
@@ -149,6 +156,9 @@ def check_robot_states_diff(robot: str, threshold: float = 30.0) -> bool:
                         try:
                             fx = float(x)
                             fy = float(y)
+                            if fx < scan_range_min or fx > scan_rage_max or fy < scan_range_min or fy > scan_range_max:
+                                error(f"Invalid value in {section}.log: \"{key}: {x}, {y}\"")
+                                return True
                             if abs(fx - fy) > threshold:
                                 error(f"Value mismatch in {section}.log: \"{key}: {x}, {y}\"")
                                 return True
