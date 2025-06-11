@@ -19,7 +19,7 @@ import core.inspector as inspector
 import core.oracle as oracle
 from core.executor import FuzzContainer, RobotStateMonitor
 from core.mutator import RTPSPacket, DDSConfig
-from core.ui import info, error, warn, debug
+from core.ui import info, error, warn, debug, done
 
 # --- Constants ---
 RETRY_MAX_ATTEMPTS = 10     # retry attempts for transient failures
@@ -154,7 +154,7 @@ class FuzzPublisher(Node):
                 self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
             except TimeoutError as e:
                 raise TimeoutError(f"{e}")
-            info(f"Sent all messages for RMW='{self.rmw_impl}'")
+            done(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             time.sleep(RETRY_DELAY)
             self.container.delete_robot(self.rmw_impl)

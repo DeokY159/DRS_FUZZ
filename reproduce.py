@@ -18,7 +18,7 @@ import core.inspector as inspector
 import core.oracle as oracle
 from core.executor import FuzzContainer, RobotStateMonitor
 from core.mutator import RTPSPacket
-from core.ui import info, error, warn, debug
+from core.ui import info, error, warn, debug, done
 from rclpy.qos import (
     QoSProfile,
     DurabilityPolicy,
@@ -156,7 +156,7 @@ class ReproPublisher(Node):
             time.sleep(RUN_DELAY)
             self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
             time.sleep(RUN_DELAY)
-            info(f"Sent all messages for RMW='{self.rmw_impl}'")
+            done(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             self.container.delete_robot(self.rmw_impl)
             self.future.set_result(True)
