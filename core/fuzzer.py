@@ -396,7 +396,6 @@ class Fuzzer:
                 with open(STATE_LOG, 'a') as f:
                     f.write(f"{datetime.datetime.now().isoformat()} - Error #{self.error_count} occured {e}\n")
                 time.sleep(RUN_DELAY)
-                self.stage += 1
                 continue 
             except KeyboardInterrupt:
                 error("Interrupted by user (ctrl+c)")
