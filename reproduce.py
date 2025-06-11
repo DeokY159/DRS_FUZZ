@@ -186,6 +186,7 @@ class Reproducer:
     }
 
     def __init__(self, version, robot, topic_name, saved_log_path: str, headless=False, asan=False) -> None:
+        self.finished   = False
         self.validation = 0
         self.run        = 1
         self.version    = version
@@ -297,7 +298,8 @@ class Reproducer:
 
     def reproduce(self) -> None:
         while True:
-            if 10 - self.run < 8 - self.validation:
+            if self.finished:
+                self.container.close_docker()
                 break
 
             # 1) start containers and Gazebo
@@ -310,6 +312,14 @@ class Reproducer:
                 info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 
                 while True:
+                    if 10 - self.run < 8 - self.validation:
+                        self.finished = True
+                        break
+
+                    if self.validation >= 8:
+                        self.finished = True
+                        break
+
                     info(f"==> Validation #{self.run} started")
                     fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
                     cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
@@ -334,6 +344,7 @@ class Reproducer:
                     self.run += 1
 
                     if self.run > 10:
+                        self.finished = True
                         break
 
             except (RuntimeError,TimeoutError) as e:
