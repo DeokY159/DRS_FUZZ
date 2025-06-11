@@ -87,7 +87,13 @@ def create_publisher(topic_name: str,
     cmd  = base + ' ' + ' '.join(flags)
     try:
         subprocess.run(['docker','exec','-d', 
+                        ### TODO: [option] If you want cross ros2 dds implementaiton testing, you can change rmw_implementation environ
+                        ### (e.g. fuzzer_<ROS_DISTRO_turtlebot3>)
+                        ### Default: '-e', f"RMW_IMPLEMENTATION={rmw_impl}"
+
                         '-e', f"RMW_IMPLEMENTATION={rmw_impl}",
+                        # '-e', f"RMW_IMPLEMENTATION=rmw_fastrtps_cpp",
+
                         '-e', f"ROS_DOMAIN_ID={domain_id}",
                         container,'bash','-ic', cmd], check=True)
     except Exception as e:

@@ -107,7 +107,14 @@ class FuzzContainer:
                 '--cpus', '2',
                 '--memory', '2g',
                 '--memory-swap', '2g',
-                '--name', self.inspector_name, self.image_tag,
+                '--name', self.inspector_name, 
+
+                ### TODO: [option] If you want cross ros2 version testing, you can change inspector container image
+                ### (e.g. fuzzer_<ROS_DISTRO_turtlebot3>)
+                ### Default: self.image_tag
+
+                self.image_tag,
+                #'fuzzer_jazzy_turtlebot3',
                 '-c', 'tail -f /dev/null'
             ], check=True)
         except Exception as e:
@@ -263,20 +270,18 @@ class RobotStateMonitor:
             log_path = f"{log_dir}/{topic}.log"
 
             with open(log_path, "w", encoding="utf-8") as out:
-                proc = subprocess.Popen(
-                    docker_cmd,
-                    stdout=out,
-                    stderr=subprocess.DEVNULL
-                )
                 try: 
+                    proc = subprocess.Popen(
+                        docker_cmd,
+                        stdout=out,
+                        stderr=subprocess.DEVNULL
+                    )
+
                     proc.wait(timeout=TIME_OUT)
                 except Exception as e:
                     proc.kill()
                     proc.wait()
                     raise TimeoutError(f"Topic '{topic}' echo timed out: {e}")
-
-            if proc.returncode != 0:
-                raise subprocess.SubprocessError(f"Topic '{topic}' echo failed (code {proc.returncode})")
 
             info(f"Robot State(/{topic}) log saved to '{log_path}'")
 
