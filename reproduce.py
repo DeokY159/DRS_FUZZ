@@ -327,7 +327,7 @@ class Reproducer:
                     break
 
             except (RuntimeError,TimeoutError) as e:
-                error(f"Error Occured - {e}")
+                error(f"Error occured - {e}")
                 warn("Cleaning up fuzzing container for restart...")
                 self.container.close_docker()
                 time.sleep(RUN_DELAY)

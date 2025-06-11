@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 
 RETRY_MAX_ATTEMPTS = 5
 TIME_DELAY        = 2.0
-TIME_OUT          = 20.0
+TIME_OUT          = 30.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -48,19 +48,24 @@ class FuzzContainer:
         except Exception as e:
             raise subprocess.CalledProcessError(f"Failed to exec in '{container}': {e}")
 
-    def _wait_for_log(self, container: str, pattern: str, timeout: float = TIME_OUT) -> None:
+    def _wait_for_log(self,container: str, pattern: str, timeout: float = TIME_OUT, interval: int = TIME_DELAY) -> bool:
+        """
+        timeout 동안 interval마다 docker logs --tail 10로 패턴을 찾아보고,
+        있으면 True, 없으면 False
+        """
         debug(f"Waiting for log pattern '{pattern}' in '{container}'")
-        proc = Popen(['docker', 'logs', '-f', container], stdout=PIPE, stderr=PIPE, text=True)
         start = time.time()
-        try:
-            for line in proc.stdout:
+        while time.time() - start < timeout:            
+            result = subprocess.run(
+                ['docker', 'logs', '--tail', '10', container],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            lines = result.stdout.splitlines()
+            for line in lines:
                 if re.search(pattern, line):
-                    done(f"[{container}] log matched: {pattern}")
-                    return
-                if time.time() - start > timeout:
-                    raise TimeoutError(f"Timeout waiting for '{pattern}' in {container}")
-        finally:
-            proc.kill()
+                    return True
+            time.sleep(interval)
+        raise TimeoutError(f"Timeout to delete robot in {container}")
 
     def run_docker(self) -> None:
         info("Granting X server access: xhost +local:root")

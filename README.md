@@ -14,7 +14,7 @@ it targets common ROS 2 communication channels and injects mutated RTPS packets 
 (e.g. https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html )
 - Install the required libraries using the following commands:
 ```bash
-sudo pip install scapy
+sudo pip install scapy rich
 sudo apt install x11-xserver-utils
 ```
 

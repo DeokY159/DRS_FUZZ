@@ -153,7 +153,7 @@ class FuzzPublisher(Node):
             try:
                 self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
             except TimeoutError as e:
-                raise TimeoutError
+                raise TimeoutError(f"{e}")
             info(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
             time.sleep(RETRY_DELAY)
@@ -318,7 +318,6 @@ class Fuzzer:
     def run(self) -> None:   
         while True:
             # 1) start containers and Gazebo
-            self.stage += 1
             try:
                 info(f"Bringing up containers & Gazebo for {self.version}/{self.robot}")
                 self.container.run_docker()
@@ -341,6 +340,7 @@ class Fuzzer:
                         self.dds_config.update_qos()
                         info(f"==> Stage {self.stage}: QoS settings updated")
                         self.round = 1
+                        self.stage += 1
                         qos = self.dds_config.get_qos()
                         self.rtps._select_input_seed()
 
@@ -396,6 +396,7 @@ class Fuzzer:
                 with open(STATE_LOG, 'a') as f:
                     f.write(f"{datetime.datetime.now().isoformat()} - Error #{self.error_count} occured {e}\n")
                 time.sleep(RUN_DELAY)
+                self.stage += 1
                 continue 
             except KeyboardInterrupt:
                 error("Interrupted by user (ctrl+c)")
