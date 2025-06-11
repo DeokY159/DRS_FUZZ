@@ -297,7 +297,8 @@ class Reproducer:
 
     def reproduce(self) -> None:
         while True:
-            if 10 - self.run < 8 - self.validation
+            if 10 - self.run < 8 - self.validation:
+                break
 
             # 1) start containers and Gazebo
             try:
