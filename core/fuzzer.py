@@ -329,7 +329,6 @@ class Fuzzer:
                 self.round = 1
                 while True:
                     # rotate QoS and increment stage
-                    detected_bug=False
 
                     fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
                     cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
@@ -377,16 +376,12 @@ class Fuzzer:
 
                     if oracle.check_robot_states_diff(robot=self.robot, threshold=30.0):
                         feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
-                        detected_bug = True
 
-                    if oracle.compare_listener(fast_log, cyclone_log, self.topic_name):
-                        feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
-                        detected_bug = True
+                        if oracle.compare_listener(fast_log, cyclone_log, self.topic_name):
+                            feedback.increase_mutation_weights(self.rtps, self.dds_config, 0.5)
 
-                    if detected_bug:
                         self.bug_count += 1
-                        self.copy_logs("semantic_bug")
-                        
+                        self.copy_logs("semantic_bug")    
 
                     if feedback.is_robot_stationary(self.robot):
                         feedback.decrease_mutation_weights(self.rtps, self.dds_config, 0.5)
