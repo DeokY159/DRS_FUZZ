@@ -154,10 +154,13 @@ class ReproPublisher(Node):
         if self.seq_num > MESSAGES_PER_RUN + 1:
             info("Stopping Robot")
             time.sleep(RUN_DELAY)
-            self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
-            time.sleep(RUN_DELAY)
+            try:
+                self.state_monitor.record_robot_states(self.rmw_impl, self.dds_id)
+            except TimeoutError as e:
+                raise TimeoutError(f"{e}")
             done(f"Sent all messages for RMW='{self.rmw_impl}'")
             self.timer.cancel()
+            time.sleep(RETRY_DELAY)
             self.container.delete_robot(self.rmw_impl)
             self.future.set_result(True)
             time.sleep(RETRY_DELAY)
@@ -217,7 +220,9 @@ class Reproducer:
             if self._check_asan(log_path):
                 error(f"ASAN detected in container {cname}")
                 self.validation += 1
+                info(f"Crash validated for Validation #{self.run}")
                 self.container.close_docker()
+                raise RuntimeError("Restart container after crash ...")
 
     def get_qos_profile(self):
         qos_file = os.path.join(self.saved_log_path, 'qos.txt')
@@ -249,13 +254,16 @@ class Reproducer:
         return payload_list
 
     def gen_packet_sender(self, rmw_impl: str) -> None:
+        if not rclpy.ok():
+            rclpy.init()
+        
         os.environ["RMW_IMPLEMENTATION"] = rmw_impl
         os.environ["ROS_DOMAIN_ID"]      = self.DOMAIN_ID_MAP[rmw_impl]
         if not rclpy.ok():
             rclpy.init()
 
         msg = f"Reproduce: RMW implementation = {rmw_impl}"
-        debug(msg)
+        #debug(msg)
 
         node = None
         try:
@@ -277,6 +285,8 @@ class Reproducer:
 
         except RuntimeError as e:
             raise RuntimeError(f"ReproPublisher runtime error: {e}")
+        except TimeoutError as e:
+            raise TimeoutError(f"FuzzPublisher timeout error: {e}")
         except (OSError, subprocess.SubprocessError) as e:
             raise subprocess.SubprocessError(f"ReproducePublisher subprocess error: {e}")
         finally:
@@ -287,6 +297,8 @@ class Reproducer:
 
     def reproduce(self) -> None:
         while True:
+            if 10 - self.run < 8 - self.validation
+
             # 1) start containers and Gazebo
             try:
                 info(f"Bringing up containers & Gazebo for {self.version}/{self.robot}")
@@ -296,35 +308,32 @@ class Reproducer:
                 info("Reproducing...")
                 info("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 
-                detected_bug=False
-
-                fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
-                cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
+                while True:
+                    info(f"==> Validation #{self.run} started")
+                    fast_log = os.path.join(LOGS_DIR, "dds_api", "fast_listener.log")
+                    cyclone_log = os.path.join(LOGS_DIR, "dds_api", "cyclone_listener.log")
                 
-                with open(fast_log, 'w') as f:
-                    f.write("")
+                    with open(fast_log, 'w') as f:
+                        f.write("")
 
-                with open(cyclone_log, 'w') as f:
-                    f.write("")
+                    with open(cyclone_log, 'w') as f:
+                        f.write("")
 
-                for rmw_impl in self.DST_IP_MAP.keys():
-                    self.gen_packet_sender(rmw_impl)
-                    self.check_asan_crash()
-                    time.sleep(RUN_DELAY)
+                    for rmw_impl in self.DST_IP_MAP.keys():
+                        self.gen_packet_sender(rmw_impl)
+                        self.check_asan_crash()
+                        time.sleep(RUN_DELAY)
 
-                if oracle.check_robot_states_diff(robot=self.robot, threshold=30.0):
-                    detected_bug = True
+                    if oracle.check_robot_states_diff(robot=self.robot, threshold=30.0):
+                        oracle.compare_listener(fast_log, cyclone_log, self.topic_name)
 
-                if oracle.compare_listener(fast_log, cyclone_log, self.topic_name):
-                    detected_bug = True
+                        self.validation += 1
+                        info(f"Semantic Bug validated for Validation #{self.run}")
 
-                if detected_bug:
-                    self.validation += 1
+                    self.run += 1
 
-                self.run += 1
-
-                if self.run > 10:
-                    break
+                    if self.run > 10:
+                        break
 
             except (RuntimeError,TimeoutError) as e:
                 error(f"Error occured - {e}")
