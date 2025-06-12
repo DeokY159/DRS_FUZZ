@@ -18,6 +18,19 @@ sudo pip install scapy rich
 sudo apt install x11-xserver-utils
 ```
 
+## 🧪 Tested
+
+OS: Window11 WSL
+
+Version:
+```
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 22.04.5 LTS
+Release:        22.04
+Codename:       jammy
+```
+
 ## 🚀 Supported Configurations
 - humble / turtlebot3 / cmd_vel
 - jazzy / turtlebot3 / cmd_vel (It's better to use `jazzy branch`)
@@ -29,6 +42,12 @@ python3 main.py <ros2_distribution> <robot> <topic_name> [--headless] [--asan]
 python3 main.py humble turtlebot3 --headless
 python3 main.py humble turtlebot3 --headless --asan
 ```
+Normally, the build environment can take a long time. You can build the environment a little faster by pulling below.
+```bash
+docker pull jmini12/drsfuzz:humble
+docker tag jmini12/drsfuzz:humble fuzzer_humble_turtlebot3_asan
+```
+
 ## 📁 Directory Structure
 ```bash
 ./build
