@@ -11,8 +11,8 @@ from core.ui import info, error, warn, done, debug
 from subprocess import Popen, PIPE
 
 RETRY_MAX_ATTEMPTS = 5
-TIME_DELAY        = 2.0
-TIME_OUT          = 30.0
+TIME_DELAY        = 1.5
+TIME_OUT          = 20.0
 DOCKER_CPU_CORES  = "4"
 DOCKER_MEMORY     = "8g"
 DOCKER_MEM_SWAP   = "8g"
@@ -63,7 +63,6 @@ class FuzzContainer:
                         return True
                 time.sleep(interval)
         except Exception as e:
-            input()
             raise TimeoutError(f"{container}")
 
     def run_docker(self) -> None:
@@ -118,7 +117,7 @@ class FuzzContainer:
                 ### Default: self.image_tag
 
                 self.image_tag,
-                #'fuzzer_jazzy_turtlebot3',
+                #'fuzzer_jazzy_turtlebot3_asan',
                 '-c', 'tail -f /dev/null'
             ], check=True)
         except Exception as e:

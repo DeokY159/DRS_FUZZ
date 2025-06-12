@@ -355,6 +355,7 @@ class DDSConfig:
     """
     QOS_SETTINGS = [
         {
+            # Default Option
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.AUTOMATIC,
@@ -364,50 +365,50 @@ class DDSConfig:
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
         {
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.AUTOMATIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
         {
             "durability": DurabilityPolicy.VOLATILE,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.AUTOMATIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_LAST,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.AUTOMATIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
         {
             "durability": DurabilityPolicy.TRANSIENT_LOCAL,
             "history": HistoryPolicy.KEEP_ALL,
             "liveliness": LivelinessPolicy.MANUAL_BY_TOPIC,
-            #"weight": 1,
-            "weight": 0,
+            "weight": 1,
+            #"weight": 0,
         },
     ]
 
