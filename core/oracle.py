@@ -36,7 +36,8 @@ def parse_imu_from_log(log_path: str) -> dict:
             }
             return imu
         except Exception as e:
-            raise ValueError(f"Failed to parse IMU block:\n{block}\nError: {e}")
+            #raise ValueError(f"Failed to parse IMU block:\n{block}\nError: {e}")
+            raise RuntimeError(f"Failed to parse IMU block:\n{block}\nError: {e}")
     
     raise FileNotFoundError("No valid IMU block found in log.")
 
@@ -67,7 +68,8 @@ def parse_odom_from_log(log_path: str) -> dict:
             }
             return odom
         except Exception as e:
-            raise ValueError(f"Failed to parse Odometry block:\n{block}\nError: {e}")
+            #raise ValueError(f"Failed to parse Odometry block:\n{block}\nError: {e}")
+            raise RuntimeError(f"Failed to parse Odometry block:\n{block}\nError: {e}")
     raise FileNotFoundError("No valid Odometry block found in log.")
 
 def parse_scan_from_log(log_path: str) -> dict:
@@ -89,7 +91,8 @@ def parse_scan_from_log(log_path: str) -> dict:
             }
             return scan
         except Exception as e:
-            raise ValueError(f"Failed to parse LaserScan block:\n{block}\nError: {e}")
+            #raise ValueError(f"Failed to parse LaserScan block:\n{block}\nError: {e}")
+            raise RuntimeError(f"Failed to parse LaserScan block:\n{block}\nError: {e}")
 
     raise FileNotFoundError("No valid LaserScan block found in log.")
 
